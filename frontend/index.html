@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0a0a0a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Grok Remote</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap');
+        
+        :root {
+            --bg: #0a0a0a;
+            --accent: #ff1a1a;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', system_ui, sans-serif;
+            background: var(--bg);
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: #111;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #222;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .logo {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #ff1a1a, #ff4d4d);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 18px;
+            color: white;
+            box-shadow: 0 0 20px rgba(255, 26, 26, 0.5);
+        }
+        
+        .header h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+        
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #888;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #22c55e;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #22c55e;
+        }
+        
+        .settings-btn {
+            background: #222;
+            border: none;
+            color: #aaa;
+            padding: 8px 12px;
+            border-radius: 9999px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .settings-btn:hover {
+            background: #333;
+            color: #fff;
+        }
+        
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 16px;
+            background: #0a0a0a;
+            scroll-behavior: smooth;
+        }
+        
+        .message {
+            max-width: 85%;
+            margin-bottom: 16px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .message.user {
+            margin-left: auto;
+            flex-direction: row-reverse;
+        }
+        
+        .message-bubble {
+            padding: 14px 18px;
+            border-radius: 20px;
+            font-size: 15px;
+            line-height: 1.45;
+            white-space: pre-wrap;
+        }
+        
+        .message.grok .message-bubble {
+            background: #1a1a1a;
+            border-bottom-left-radius: 4px;
+            color: #eee;
+        }
+        
+        .message.user .message-bubble {
+            background: linear-gradient(135deg, #ff1a1a, #cc0000);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message-meta {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+            padding: 0 4px;
+        }
+        
+        .input-area {
+            background: #111;
+            padding: 16px;
+            border-top: 1px solid #222;
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        
+        .input-wrapper {
+            flex: 1;
+            background: #1a1a1a;
+            border-radius: 9999px;
+            padding: 4px 4px 4px 20px;
+            display: flex;
+            align-items: center;
+            border: 1px solid #333;
+        }
+        
+        #prompt-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-size: 16px;
+            padding: 12px 0;
+            outline: none;
+            resize: none;
+            max-height: 120px;
+            line-height: 1.4;
+        }
+        
+        .send-btn {
+            width: 44px;
+            height: 44px;
+            background: #ff1a1a;
+            border: none;
+            border-radius: 9999px;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(255, 26, 26, 0.4);
+        }
+        
+        .send-btn:active {
+            transform: scale(0.92);
+        }
+        
+        .send-btn:disabled {
+            background: #444;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+        
+        .welcome {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+        
+        .welcome h2 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: #aaa;
+        }
+        
+        .welcome p {
+            font-size: 14px;
+            max-width: 260px;
+            margin: 0 auto;
+        }
+        
+        .typing {
+            display: inline-flex;
+            gap: 4px;
+            padding: 14px 18px;
+        }
+        
+        .typing span {
+            width: 6px;
+            height: 6px;
+            background: #666;
+            border-radius: 50%;
+            animation: typingBounce 1.2s infinite ease-in-out;
+        }
+        
+        .typing span:nth-child(2) { animation-delay: 0.2s; }
+        .typing span:nth-child(3) { animation-delay: 0.4s; }
+        
+        @keyframes typingBounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        
+        .control-hint {
+            font-size: 12px;
+            color: #555;
+            text-align: center;
+            padding: 8px;
+            background: #111;
+            margin: 0 16px 12px;
+            border-radius: 8px;
+        }
+        
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+        }
+        
+        .modal-content {
+            background: #1a1a1a;
+            width: 90%;
+            max-width: 360px;
+            border-radius: 20px;
+            padding: 24px;
+        }
+        
+        .modal h3 {
+            margin-bottom: 16px;
+            font-size: 18px;
+        }
+        
+        .modal input {
+            width: 100%;
+            background: #222;
+            border: 1px solid #444;
+            padding: 12px 16px;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .modal button {
+            width: 100%;
+            padding: 14px;
+            background: #ff1a1a;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <div class="logo">G</div>
+            <div>
+                <h1>Grok Remote</h1>
+                <div class="status">
+                    <div class="status-dot"></div>
+                    <span id="connection-status">Connected to PC</span>
+                </div>
+            </div>
+        </div>
+        <button class="settings-btn" onclick="showSettings()">⚙️ Settings</button>
+    </div>
+
+    <!-- Chat -->
+    <div class="chat-container" id="chat-container">
+        <div class="welcome" id="welcome-screen">
+            <h2>👋 Phone connected to your PC</h2>
+            <p>You're now remotely controlling Grok Build. Type a prompt below to get started.</p>
+            <p style="margin-top: 20px; font-size: 12px;">Try: "build me a simple todo app" or "what's the weather like in Dallas?"</p>
+        </div>
+    </div>
+
+    <!-- Input -->
+    <div class="input-area">
+        <div class="input-wrapper">
+            <textarea id="prompt-input" placeholder="Message Grok on your PC..." rows="1" onkeydown="if (event.key === 'Enter' &amp;&amp; !event.shiftKey) { event.preventDefault(); sendMessage(); }"></textarea>
+        </div>
+        <button class="send-btn" id="send-btn" onclick="sendMessage()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-content">
+            <h3>🔧 Connection Settings</h3>
+            <p style="color:#888; font-size:13px; margin-bottom:12px;">Enter your computer's local IP + port (usually 3000)</p>
+            
+            <input type="text" id="backend-url" placeholder="http://192.168.1.42:3000" value="http://192.168.1.42:3000">
+            
+            <button onclick="saveSettings()">Save &amp; Connect</button>
+            
+            <p style="font-size:11px; color:#555; margin-top:16px; text-align:center;">
+                Find your IP: Run <code>ipconfig</code> (Windows) or <code>ifconfig</code> (Mac/Linux) on your PC
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // PWA Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('✅ Service Worker registered'))
+                    .catch(err => console.log('SW registration failed:', err));
+            });
+        }
+
+        // Install prompt
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            // Show a subtle install hint after 10 seconds
+            setTimeout(() => {
+                if (deferredPrompt) {
+                    const hint = document.createElement('div');
+                    hint.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#222;color:#aaa;padding:8px 16px;border-radius:20px;font-size:12px;cursor:pointer;z-index:50;';
+                    hint.innerHTML = '📱 Add Grok Remote to home screen';
+                    hint.onclick = () => {
+                        deferredPrompt.prompt();
+                        deferredPrompt.userChoice.then(() => {
+                            hint.remove();
+                            deferredPrompt = null;
+                        });
+                    };
+                    document.body.appendChild(hint);
+                    setTimeout(() => hint.remove(), 8000);
+                }
+            }, 10000);
+        });
+
+        // State
+        let backendURL = localStorage.getItem('grokRemoteBackend') || 'http://192.168.1.42:3000';
+        let isConnected = false;
+
+        // Load saved URL
+        function loadSettings() {
+            const input = document.getElementById('backend-url');
+            input.value = backendURL;
+        }
+
+        function showSettings() {
+            const modal = document.getElementById('settings-modal');
+            loadSettings();
+            modal.style.display = 'flex';
+        }
+
+        function saveSettings() {
+            const input = document.getElementById('backend-url').value.trim();
+            if (input) {
+                backendURL = input;
+                localStorage.setItem('grokRemoteBackend', backendURL);
+                document.getElementById('settings-modal').style.display = 'none';
+                checkConnection();
+            }
+        }
+
+        // Check backend connection
+        async function checkConnection() {
+            const statusEl = document.getElementById('connection-status');
+            try {
+                const res = await fetch(`${backendURL}/api/status`, { 
+                    method: 'GET',
+                    signal: AbortSignal.timeout(4000)
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    statusEl.innerHTML = `Connected • ${data.message.split(' ')[0]}`;
+                    statusEl.style.color = '#22c55e';
+                    isConnected = true;
+                    return true;
+                }
+            } catch (e) {
+                console.log('Connection check failed:', e);
+            }
+            statusEl.innerHTML = 'Offline - tap settings';
+            statusEl.style.color = '#ef4444';
+            isConnected = false;
+            return false;
+        }
+
+        // Add message to chat
+        function addMessage(role, content, isTyping = false) {
+            const container = document.getElementById('chat-container');
+            const welcome = document.getElementById('welcome-screen');
+            if (welcome) welcome.style.display = 'none';
+
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${role}`;
+
+            if (role === 'grok') {
+                msgDiv.innerHTML = `
+                    <div style="width:28px;height:28px;background:linear-gradient(135deg,#ff1a1a,#cc0000);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:4px;">
+                        <span style="font-size:14px;font-weight:700;color:white;">G</span>
+                    </div>
+                    <div>
+                        <div class="message-bubble">${content}</div>
+                        <div class="message-meta">Grok • just now</div>
+                    </div>
+                `;
+            } else {
+                msgDiv.innerHTML = `
+                    <div>
+                        <div class="message-bubble">${content}</div>
+                        <div class="message-meta" style="text-align:right;">You • just now</div>
+                    </div>
+                `;
+            }
+
+            container.appendChild(msgDiv);
+            container.scrollTop = container.scrollHeight;
+
+            return msgDiv;
+        }
+
+        // Send message
+        async function sendMessage() {
+            const input = document.getElementById('prompt-input');
+            const sendBtn = document.getElementById('send-btn');
+            const prompt = input.value.trim();
+
+            if (!prompt || !isConnected) return;
+
+            // Add user message
+            addMessage('user', prompt);
+            input.value = '';
+            sendBtn.disabled = true;
+
+            // Show typing indicator
+            const container = document.getElementById('chat-container');
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message grok';
+            typingDiv.innerHTML = `
+                <div style="width:28px;height:28px;background:linear-gradient(135deg,#ff1a1a,#cc0000);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:4px;">
+                    <span style="font-size:14px;font-weight:700;color:white;">G</span>
+                </div>
+                <div>
+                    <div class="message-bubble typing">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            `;
+            container.appendChild(typingDiv);
+            container.scrollTop = container.scrollHeight;
+
+            try {
+                const res = await fetch(`${backendURL}/api/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt })
+                });
+
+                const data = await res.json();
+                
+                // Remove typing
+                typingDiv.remove();
+
+                if (data.error) {
+                    addMessage('grok', `❌ ${data.error} ${data.fallback ? '(Using mock mode)' : ''}`);
+                } else {
+                    addMessage('grok', data.response);
+                }
+            } catch (err) {
+                typingDiv.remove();
+                addMessage('grok', `Connection failed. Is the backend running on your PC? Check the IP in Settings. Error: ${err.message}`);
+            }
+
+            sendBtn.disabled = false;
+            input.focus();
+        }
+
+        // Keyboard handling
+        function setupInput() {
+            const input = document.getElementById('prompt-input');
+            
+            input.addEventListener('input', () => {
+                input.style.height = 'auto';
+                input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+            });
+
+            // Auto-focus on load
+            setTimeout(() => input.focus(), 800);
+        }
+
+        // Initial setup
+        async function init() {
+            console.log('%c[Grok Remote] PWA initialized', 'color:#666');
+            
+            loadSettings();
+            setupInput();
+
+            // Check connection
+            const connected = await checkConnection();
+            
+            if (!connected) {
+                // Show settings hint
+                setTimeout(() => {
+                    const status = document.getElementById('connection-status');
+                    if (status.textContent.includes('Offline')) {
+                        status.style.cursor = 'pointer';
+                        status.onclick = () => showSettings();
+                    }
+                }, 1500);
+            }
+
+            // Demo message after 3 seconds if no activity
+            setTimeout(() => {
+                const container = document.getElementById('chat-container');
+                if (container.children.length <= 1) {
+                    const hint = document.createElement('div');
+                    hint.style.cssText = 'text-align:center;color:#444;font-size:12px;margin:20px 0;';
+                    hint.innerHTML = '💡 Tip: This is currently in mock mode.<br>Plug in your xAI key in server.js for real Grok responses.';
+                    container.appendChild(hint);
+                }
+            }, 3000);
+
+            // Easter egg: Konami code for fun
+            let konami = '';
+            document.addEventListener('keydown', (e) => {
+                konami += e.key;
+                if (konami.length > 10) konami = konami.slice(-10);
+                if (konami.includes('ArrowUpArrowUpArrowDownArrowDownArrowLeftArrowRightArrowLeftArrowRightba')) {
+                    const chat = document.getElementById('chat-container');
+                    chat.style.background = 'linear-gradient(45deg, #0a0a0a, #1a0033)';
+                    setTimeout(() => {
+                        chat.style.background = '#0a0a0a';
+                        addMessage('grok', '🚀 Konami code activated! You unlocked maximum Grok mode. (Just kidding, but you\'re based for trying)');
+                    }, 800);
+                    konami = '';
+                }
+            });
+
+            console.log('%c[Grok Remote] Ready. Phone → PC connection established (in spirit)', 'color:#22c55e');
+        }
+
+        // Boot it up
+        window.onload = init;
+    </script>
+</body>
+</html>
