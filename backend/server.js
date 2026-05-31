@@ -8,15 +8,53 @@ const { WebSocketServer } = require('ws');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// === Simple API Key Auth (set GROK_REMOTE_KEY in .env) ===
-const API_KEY = process.env.GROK_REMOTE_KEY || 'demo-key-2026';
+// === Improved Token-Based Auth ===
+// Tokens are short-lived and generated per session (much more secure)
+const activeTokens = new Map(); // token -> { createdAt, expiresAt }
+const TOKEN_EXPIRY_HOURS = 2;
+
+function generateToken() {
+  return 'grt_' + Math.random().toString(36).substring(2, 15) + 
+         Math.random().toString(36).substring(2, 15);
+}
 
 function requireAuth(req, res, next) {
-  const key = req.headers['x-api-key'] || req.query.key;
-  if (key !== API_KEY) {
-    return res.status(401).json({ error: 'Unauthorized - invalid API key' });
+  const token = req.headers['x-api-key'] || req.query.token || req.query.key;
+  
+  if (!token || !activeTokens.has(token)) {
+    return res.status(401).json({ error: 'Unauthorized - invalid or expired token' });
   }
+  
+  const tokenData = activeTokens.get(token);
+  if (Date.now() > tokenData.expiresAt) {
+    activeTokens.delete(token);
+    return res.status(401).json({ error: 'Token expired. Please reconnect.' });
+  }
+  
   next();
+}
+
+// Helper to create a new session token
+function createSessionToken() {
+  const token = generateToken();
+  const now = Date.now();
+  const expiresAt = now + (TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
+  
+  activeTokens.set(token, {
+    createdAt: now,
+    expiresAt: expiresAt
+  });
+  
+  // Auto-cleanup expired tokens every hour
+  setTimeout(() => {
+    for (const [t, data] of activeTokens.entries()) {
+      if (Date.now() > data.expiresAt) {
+        activeTokens.delete(t);
+      }
+    }
+  }, 60 * 60 * 1000);
+  
+  return token;
 }
 
 // Middleware
@@ -40,18 +78,18 @@ app.get('/', (req, res) => {
   res.redirect('/qr');
 });
 
-// === NEW: QR Code pairing endpoint (protected) ===
-app.get('/api/qr', requireAuth, async (req, res) => {
+// === NEW: QR Code pairing endpoint (now generates fresh token) ===
+app.get('/api/qr', async (req, res) => {
   try {
-    // Get the actual host the request came from (works great on local network)
     const host = req.get('host') || `localhost:${PORT}`;
     const backendUrl = `http://${host}`;
     
-    // Encode a simple JSON payload the PWA can parse
+    // Generate a fresh short-lived token for this session
+    const sessionToken = createSessionToken();
+    
     const qrPayload = JSON.stringify({
       url: backendUrl,
-      key: API_KEY,
-      token: 'grok-remote-demo-2026'  // In real version this would be a secure short-lived token
+      token: sessionToken
     });
     
     const qrDataUrl = await QRCode.toDataURL(qrPayload, {
@@ -66,7 +104,7 @@ app.get('/api/qr', requireAuth, async (req, res) => {
     res.json({
       qr: qrDataUrl,
       url: backendUrl,
-      key: API_KEY,
+      token: sessionToken,
       instructions: 'Scan this with the Grok Remote PWA on your phone'
     });
   } catch (err) {
@@ -79,7 +117,8 @@ app.get('/qr', async (req, res) => {
   try {
     const host = req.get('host') || `localhost:${PORT}`;
     const backendUrl = `http://${host}`;
-    const qrPayload = JSON.stringify({ url: backendUrl, key: API_KEY, token: 'grok-remote-demo-2026' });
+    const sessionToken = createSessionToken();
+    const qrPayload = JSON.stringify({ url: backendUrl, token: sessionToken });
     const qrDataUrl = await QRCode.toDataURL(qrPayload, { width: 400, margin: 2 });
     
     res.send(`
