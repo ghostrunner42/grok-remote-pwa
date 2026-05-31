@@ -342,21 +342,29 @@
     </div>
 
     <!-- Files Tab (hidden by default) -->
-    <div id="files-container" style="display:none; flex:1; overflow-y:auto; padding:16px; background:#0a0a0a;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <div>
-                <span style="color:#888;">Current:</span> 
-                <span id="current-path" style="color:#fff; font-family:monospace;">/</span>
+    <div id="files-container" style="display:none; flex:1; overflow-y:auto; padding:12px 16px; background:#0a0a0a;">
+        <!-- Breadcrumb + Search -->
+        <div style="margin-bottom:12px;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                <div id="breadcrumb" style="flex:1; font-size:13px; color:#aaa; font-family:monospace; overflow-x:auto; white-space:nowrap; padding:4px 0;"></div>
+                <button onclick="goBack()" style="background:#222; color:#fff; border:none; padding:6px 10px; border-radius:6px; font-size:12px; flex-shrink:0;">←</button>
             </div>
-            <button onclick="goBack()" style="background:#222; color:#fff; border:none; padding:6px 12px; border-radius:6px; font-size:13px;">← Back</button>
+            
+            <input 
+                type="text" 
+                id="file-search" 
+                placeholder="Search files..." 
+                oninput="filterFiles()"
+                style="width:100%; background:#111; border:1px solid #333; color:#fff; padding:10px 14px; border-radius:9999px; font-size:14px; outline:none;"
+            >
         </div>
         
-        <div id="file-list" style="background:#111; border-radius:12px; overflow:hidden;">
+        <div id="file-list" style="background:#111; border-radius:12px; overflow:hidden; margin-bottom:12px;">
             <!-- Populated by JS -->
         </div>
         
-        <p style="color:#555; font-size:12px; margin-top:16px; text-align:center;">
-            Only showing safe project files
+        <p style="color:#555; font-size:11px; text-align:center;">
+            Tap folders to open • Tap files to edit
         </p>
     </div>
 
@@ -711,7 +719,7 @@
                             
                             stopQRScan();
                             
-                            // Auto connect
+                            // Auto connect + WebSocket
                             setTimeout(async () => {
                                 const connected = await checkConnection();
                                 if (connected) {
@@ -782,7 +790,7 @@
 
         async function loadFiles(path = '') {
             const listEl = document.getElementById('file-list');
-            const pathEl = document.getElementById('current-path');
+            const breadcrumbEl = document.getElementById('breadcrumb');
             
             listEl.innerHTML = '<div style="padding:20px; text-align:center; color:#666;">Loading...</div>';
             
@@ -792,8 +800,18 @@
                 });
                 const data = await res.json();
                 
-                pathEl.textContent = data.currentPath || '/';
                 currentFilePath = data.currentPath || '';
+                
+                // Generate breadcrumb
+                const parts = currentFilePath.split('/').filter(Boolean);
+                let breadcrumbHTML = `<span style="color:#ff1a1a; cursor:pointer;" onclick="loadFiles('')">projects</span>`;
+                let currentBuild = '';
+                
+                parts.forEach((part, index) => {
+                    currentBuild += (currentBuild ? '/' : '') + part;
+                    breadcrumbHTML += ` <span style="color:#555;">/</span> <span style="color:#ff1a1a; cursor:pointer;" onclick="loadFiles('${currentBuild}')">${part}</span>`;
+                });
+                breadcrumbEl.innerHTML = breadcrumbHTML || 'projects';
                 
                 if (!data.files || data.files.length === 0) {
                     listEl.innerHTML = '<div style="padding:20px; color:#666; text-align:center;">Empty folder</div>';
@@ -808,17 +826,28 @@
                         `openFile('${file.path}')`;
                     
                     html += `
-                        <div onclick="${clickAction}" style="padding:14px 16px; border-bottom:1px solid #222; display:flex; align-items:center; gap:12px; cursor:pointer;">
-                            <span style="font-size:20px;">${icon}</span>
-                            <span style="flex:1; color:#eee;">${file.name}</span>
-                            ${file.isDirectory ? '<span style="color:#555; font-size:12px;">→</span>' : ''}
+                        <div onclick="${clickAction}" style="padding:16px 18px; border-bottom:1px solid #222; display:flex; align-items:center; gap:14px; cursor:pointer; transition: background 0.1s;">
+                            <span style="font-size:22px; width:28px;">${icon}</span>
+                            <span style="flex:1; color:#eee; font-size:15px;">${file.name}</span>
+                            ${file.isDirectory ? '<span style="color:#555; font-size:13px;">›</span>' : ''}
                         </div>
                     `;
                 });
                 
                 listEl.innerHTML = html;
             } catch (err) {
-                listEl.innerHTML = `<div style="padding:20px; color:#ef4444;">Failed to load files. Is the backend running?</div>`;
+                listEl.innerHTML = `<div style="padding:20px; color:#ef4444;">Failed to load files</div>`;
+            }
+        }
+        
+        function filterFiles() {
+            const searchTerm = document.getElementById('file-search').value.toLowerCase();
+            const listEl = document.getElementById('file-list');
+            const items = listEl.getElementsByTagName('div');
+            
+            for (let i = 0; i < items.length; i++) {
+                const text = items[i].textContent.toLowerCase();
+                items[i].style.display = text.includes(searchTerm) ? '' : 'none';
             }
         }
 
@@ -838,25 +867,28 @@
                 });
                 const data = await res.json();
                 
-                // Create modal for file editing
-                const modal = document.createElement('div');
-                modal.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); z-index:300; display:flex; align-items:center; justify-content:center;';
-                modal.innerHTML = `
-                    <div style="background:#1a1a1a; width:95%; max-width:600px; border-radius:16px; padding:20px; max-height:80vh; display:flex; flex-direction:column;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                            <h3 style="margin:0; color:#fff; font-size:16px;">${filePath}</h3>
-                            <button onclick="this.closest('.modal').remove()" style="background:none; border:none; color:#888; font-size:24px; cursor:pointer;">×</button>
+                // Bottom sheet (more mobile-native)
+                const sheet = document.createElement('div');
+                sheet.style.cssText = 'position:fixed; bottom:0; left:0; right:0; background:#1a1a1a; border-radius:20px 20px 0 0; z-index:300; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 -4px 20px rgba(0,0,0,0.4);';
+                sheet.innerHTML = `
+                    <div style="padding:16px 20px 12px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
+                        <div style="flex:1; min-width:0;">
+                            <div style="color:#fff; font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${filePath.split('/').pop()}</div>
+                            <div style="color:#666; font-size:11px; font-family:monospace; margin-top:2px;">${filePath}</div>
                         </div>
-                        
-                        <textarea id="file-content" style="flex:1; background:#111; color:#eee; border:1px solid #333; border-radius:8px; padding:12px; font-family:monospace; font-size:14px; resize:none;">${data.content}</textarea>
-                        
-                        <div style="margin-top:12px; display:flex; gap:10px;">
-                            <button onclick="saveFile('${filePath}', this)" style="flex:1; background:#ff1a1a; color:white; border:none; padding:12px; border-radius:8px; font-weight:600;">Save Changes</button>
-                            <button onclick="this.closest('.modal').remove()" style="flex:1; background:#333; color:#fff; border:none; padding:12px; border-radius:8px;">Close</button>
-                        </div>
+                        <button onclick="this.closest('div[style*=\'position:fixed\']').remove()" style="background:none; border:none; color:#888; font-size:28px; line-height:1; padding:0 8px;">×</button>
+                    </div>
+                    
+                    <div style="flex:1; padding:16px; overflow-y:auto;">
+                        <textarea id="file-content" style="width:100%; height:100%; min-height:200px; background:#111; color:#eee; border:1px solid #333; border-radius:12px; padding:14px; font-family:monospace; font-size:14px; resize:vertical; line-height:1.5;">${data.content}</textarea>
+                    </div>
+                    
+                    <div style="padding:16px; border-top:1px solid #333; display:flex; gap:10px; background:#1a1a1a; border-radius:0 0 20px 20px;">
+                        <button onclick="saveFile('${filePath}', this)" style="flex:1; background:#ff1a1a; color:white; border:none; padding:14px; border-radius:9999px; font-weight:600; font-size:15px;">Save</button>
+                        <button onclick="this.closest('div[style*=\'position:fixed\']').remove()" style="flex:1; background:#333; color:#fff; border:none; padding:14px; border-radius:9999px; font-size:15px;">Close</button>
                     </div>
                 `;
-                document.body.appendChild(modal);
+                document.body.appendChild(sheet);
             } catch (err) {
                 alert('Failed to open file');
             }
@@ -883,8 +915,7 @@
                 if (result.success) {
                     btn.textContent = '✅ Saved!';
                     setTimeout(() => {
-                        btn.closest('.modal').remove();
-                        // Refresh file list
+                        btn.closest('div[style*=\'position:fixed\']').remove();
                         loadFiles(currentFilePath);
                     }, 800);
                 } else {
