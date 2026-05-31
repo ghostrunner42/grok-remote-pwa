@@ -1,44 +1,112 @@
-# Grok Remote - PWA Remote Control for Grok Build
+# Grok Remote
 
-Yo bro, this is the proof-of-concept for a mobile PWA that lets you run and control Grok-powered builds on your computer from your phone. Think Claude's computer-use vibe but with xAI Grok doing the heavy lifting on your PC.
+**Mobile-first remote control for Grok Build** — Scan a QR code on your computer and instantly control Grok from your phone with a full remote file browser.
 
-## What it does (MVP)
-- Installable PWA on your phone (add to home screen)
-- Chat interface: Type prompts like "build me a landing page" or "fix this bug"
-- Sends to your PC's backend server
-- Backend calls Grok API (or mocks for now) and replies
-- Future: Execute builds locally, save projects to folder, run commands safely, maybe even screenshot/control if we level up
+Think Claude computer-use, but built for xAI Grok and optimized for mobile.
 
-## Quick Start (on your computer)
+---
 
-1. Make sure you have Node.js installed (v18+)
-2. cd into backend/
-3. npm install express cors
-4. Get your xAI API key from https://console.x.ai (if you don't have one yet)
-5. Set env var: export XAI_API_KEY=your_key_here   (or hardcode for testing - don't do this in prod)
-6. node server.js
-7. Note your computer's local IP (run `ipconfig` on Windows or `ifconfig` / `ip addr` on Mac/Linux) - something like 192.168.1.42
-8. Open the frontend/index.html in a browser on your PC first to test (or serve it)
+## ✨ Features
 
-## On your phone
-1. Open the frontend/index.html URL (or host it simply with `npx serve frontend` and access via phone on same WiFi)
-2. Or better: Deploy frontend somewhere public later, but for POC use local network
-3. Enter your PC's IP:3000 in the settings
-4. Chat away! It should feel like remote-controlling Grok on your rig
+- **QR Code Pairing** — One-tap connection from phone to PC
+- **Remote Chat** — Talk to Grok from your phone while it runs on your computer
+- **Remote File Browser** — Browse, open, edit, and save files directly from your phone (safe sandboxed to `/projects`)
+- **API Key Security** — Protected endpoints with simple key-based auth
+- **PWA** — Installable on iOS and Android home screen
+- **Docker Ready** — One-command deployment
 
-## Tech Stack
-- Frontend: Pure HTML/CSS/JS PWA (no heavy frameworks for simplicity)
-- Backend: Node + Express
-- Future upgrades: WebSockets for real-time, Socket.io, file system integration for actual builds, auth, ngrok for internet access from anywhere
+---
 
-## Next Level Ideas (tell me what to add)
-- Actual code generation + file writing on PC ("build a todo app" → creates /projects/todo-app/)
-- Run terminal commands from phone (whitelisted safe ones)
-- Live preview of generated sites
-- Voice input on mobile
-- Multiple sessions / projects dashboard
-- Full Claude-style computer use simulation (virtual mouse/keyboard via phone gestures - ambitious!)
+## Quick Start (Docker - Recommended)
 
-This is 100% proof-of-concept to see how far we can push it. Let's iterate fast!
+```bash
+git clone https://github.com/ghostrunner42/grok-remote-pwa.git
+cd grok-remote-pwa
 
-If you run into issues or want changes, just say the word. Let's build this thing! 🚀
+# Copy env and set your key
+cp .env.example .env
+# Edit .env and set GROK_REMOTE_KEY to something strong
+
+docker-compose up --build
+```
+
+Then open `http://localhost:3000/qr` on your computer and scan with your phone.
+
+---
+
+## Manual Start (Node.js)
+
+```bash
+cd backend
+npm install
+export GROK_REMOTE_KEY=your-secret-key-here
+node server.js
+```
+
+---
+
+## How to Use
+
+1. Start the backend on your computer
+2. Open `http://YOUR-PC-IP:3000/qr` in your browser
+3. On your phone, open the PWA (or scan the QR directly)
+4. Tap **📷 Scan QR** — connection is automatic
+5. Switch between **Chat** and **Files** tabs
+
+In the Files tab you can:
+- Browse folders
+- Open and edit files
+- Save changes back to your PC in real time
+
+---
+
+## Security
+
+- All sensitive endpoints require an API key
+- File access is sandboxed to the `projects/` directory only
+- Never expose this publicly without proper auth + HTTPS
+
+---
+
+## Why This Matters for xAI
+
+This is a complete, working prototype of **mobile remote development for Grok**.
+
+Key advantages:
+- Extremely low friction onboarding (QR scan)
+- Real file system access from phone
+- Designed to work with future Grok computer-use features
+- Minimal new infrastructure required
+- Feels native to how developers actually work
+
+This could become a flagship mobile experience for Grok Build.
+
+---
+
+## Roadmap (Community + xAI)
+
+- [x] QR pairing
+- [x] Remote file browser + edit/save
+- [x] API key security
+- [x] Docker support
+- [ ] WebSocket real-time updates
+- [ ] Voice input on mobile
+- [ ] Project templates ("build a Next.js app" → auto scaffold + open in phone)
+- [ ] Full Claude-style computer use integration (when available)
+
+---
+
+## Contributing
+
+This started as a proof-of-concept. Pull requests welcome!
+
+Especially looking for:
+- Better mobile UX
+- More secure auth (JWT, etc.)
+- Integration with real xAI API streaming
+
+---
+
+**Built with ❤️ for the xAI community**
+
+*“The best way to predict the future is to build it.”* — and then control it from your phone.

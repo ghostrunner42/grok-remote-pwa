@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  grok-remote:
+    build: ./backend
+    ports:
+      - "3000:3000"
+    environment:
+      - GROK_REMOTE_KEY=${GROK_REMOTE_KEY:-demo-key-2026}
+      - PORT=3000
+    volumes:
+      - ./projects:/app/projects  # Optional: persist projects outside container
+    restart: unless-stopped

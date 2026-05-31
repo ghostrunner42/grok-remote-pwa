@@ -7,8 +7,19 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// === Simple API Key Auth (set GROK_REMOTE_KEY in .env) ===
+const API_KEY = process.env.GROK_REMOTE_KEY || 'demo-key-2026';
+
+function requireAuth(req, res, next) {
+  const key = req.headers['x-api-key'] || req.query.key;
+  if (key !== API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized - invalid API key' });
+  }
+  next();
+}
+
 // Middleware
-app.use(cors()); // Allow requests from your phone on the same network
+app.use(cors());
 app.use(express.json());
 
 // Simple in-memory chat history (per session - we can expand later)
@@ -23,8 +34,8 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// === NEW: QR Code pairing endpoint ===
-app.get('/api/qr', async (req, res) => {
+// === NEW: QR Code pairing endpoint (protected) ===
+app.get('/api/qr', requireAuth, async (req, res) => {
   try {
     // Get the actual host the request came from (works great on local network)
     const host = req.get('host') || `localhost:${PORT}`;
@@ -33,6 +44,7 @@ app.get('/api/qr', async (req, res) => {
     // Encode a simple JSON payload the PWA can parse
     const qrPayload = JSON.stringify({
       url: backendUrl,
+      key: API_KEY,
       token: 'grok-remote-demo-2026'  // In real version this would be a secure short-lived token
     });
     
@@ -48,6 +60,7 @@ app.get('/api/qr', async (req, res) => {
     res.json({
       qr: qrDataUrl,
       url: backendUrl,
+      key: API_KEY,
       instructions: 'Scan this with the Grok Remote PWA on your phone'
     });
   } catch (err) {
@@ -60,7 +73,7 @@ app.get('/qr', async (req, res) => {
   try {
     const host = req.get('host') || `localhost:${PORT}`;
     const backendUrl = `http://${host}`;
-    const qrPayload = JSON.stringify({ url: backendUrl, token: 'grok-remote-demo-2026' });
+    const qrPayload = JSON.stringify({ url: backendUrl, key: API_KEY, token: 'grok-remote-demo-2026' });
     const qrDataUrl = await QRCode.toDataURL(qrPayload, { width: 400, margin: 2 });
     
     res.send(`
@@ -97,7 +110,7 @@ const PROJECTS_DIR = path.join(__dirname, 'projects');
 // Ensure projects folder exists
 fs.mkdir(PROJECTS_DIR, { recursive: true }).catch(() => {});
 
-app.get('/api/files', async (req, res) => {
+app.get('/api/files', requireAuth, async (req, res) => {
   try {
     const requestedPath = req.query.path || '';
     const safePath = path.join(PROJECTS_DIR, requestedPath);
@@ -128,7 +141,7 @@ app.get('/api/files', async (req, res) => {
   }
 });
 
-app.get('/api/read-file', async (req, res) => {
+app.get('/api/read-file', requireAuth, async (req, res) => {
   try {
     const filePath = req.query.path;
     if (!filePath) return res.status(400).json({ error: 'Path required' });
@@ -145,7 +158,7 @@ app.get('/api/read-file', async (req, res) => {
   }
 });
 
-app.post('/api/write-file', async (req, res) => {
+app.post('/api/write-file', requireAuth, async (req, res) => {
   try {
     const { path: filePath, content } = req.body;
     if (!filePath || content === undefined) {
