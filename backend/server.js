@@ -232,53 +232,57 @@ app.post('/api/chat', async (req, res) => {
 
   console.log(`📱 Phone sent prompt: "${prompt}"`);
 
-  // TODO: Real xAI Grok API integration
-  // 1. Get your API key from https://console.x.ai
-  // 2. Uncomment the fetch block below and add your key
-  // 3. The API is OpenAI-compatible: https://api.x.ai/v1/chat/completions
-  //
-  // Example real integration:
-  /*
-  try {
-    const xaiResponse = await fetch('https://api.x.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.XAI_API_KEY || 'YOUR_KEY_HERE'}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'grok-2-1212',  // or 'grok-beta' / whatever the current model is
-        messages: [
-          { role: 'system', content: 'You are Grok, built by xAI. Be helpful, maximally truthful, and a bit based. The user is controlling you remotely from their phone via this PWA.' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 2000
-      })
-    });
+  const xaiKey = process.env.XAI_API_KEY;
 
-    const data = await xaiResponse.json();
-    if (!xaiResponse.ok) throw new Error(data.error?.message || 'API error');
-    
-    const grokReply = data.choices[0].message.content;
-    chatHistory.push({ role: 'user', content: prompt });
-    chatHistory.push({ role: 'assistant', content: grokReply });
-    
-    return res.json({ 
-      response: grokReply,
-      sessionId 
-    });
-  } catch (error) {
-    console.error('xAI API error:', error);
-    return res.status(500).json({ 
-      error: 'Grok API call failed. Check your key and internet.',
-      fallback: true 
-    });
+  // === REAL xAI GROK API INTEGRATION ===
+  if (xaiKey) {
+    try {
+      const xaiResponse = await fetch('https://api.x.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${xaiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'grok-2-1212',
+          messages: [
+            { 
+              role: 'system', 
+              content: 'You are Grok, built by xAI. Be helpful, maximally truthful, and a bit based. The user is controlling you remotely from their phone via this PWA. Keep responses concise but useful.' 
+            },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 2000
+        })
+      });
+
+      const data = await xaiResponse.json();
+
+      if (!xaiResponse.ok) {
+        throw new Error(data.error?.message || 'xAI API error');
+      }
+
+      const grokReply = data.choices[0].message.content;
+      chatHistory.push({ role: 'user', content: prompt });
+      chatHistory.push({ role: 'assistant', content: grokReply });
+
+      return res.json({ 
+        response: grokReply,
+        sessionId,
+        model: 'grok-2-1212'
+      });
+
+    } catch (error) {
+      console.error('xAI API error:', error);
+      return res.status(500).json({ 
+        error: 'Grok API call failed. Check your XAI_API_KEY.',
+        fallback: true 
+      });
+    }
   }
-  */
 
-  // === MOCK MODE (for testing without API key) ===
-  // Simulate Grok thinking...
+  // === FALLBACK: MOCK MODE (when no XAI_API_KEY is set) ===
   await new Promise(resolve => setTimeout(resolve, 800));
 
   let mockReply = `🔥 Grok here from your PC! Got your prompt: "${prompt}"\n\n`;
@@ -288,7 +292,7 @@ app.post('/api/chat', async (req, res) => {
   } else if (prompt.toLowerCase().includes('hello') || prompt.toLowerCase().includes('hi')) {
     mockReply += `What's good? Your phone is now wirelessly controlling me on this rig. Feels like the future, right?`;
   } else {
-    mockReply += `Solid prompt. In a full build I'd hit the real xAI API and give you a fire response. For now, imagine I just wrote you some killer code or ran a build command. What's next on the agenda?`;
+    mockReply += `Solid prompt. Add your XAI_API_KEY to the environment to get real Grok responses instead of this mock. What's next on the agenda?`;
   }
 
   chatHistory.push({ role: 'user', content: prompt });
@@ -297,79 +301,6 @@ app.post('/api/chat', async (req, res) => {
   res.json({ 
     response: mockReply,
     sessionId,
-    note: 'This is mock mode. Add your XAI_API_KEY to use real Grok.'
+    note: 'Mock mode — set XAI_API_KEY for real Grok'
   });
 });
-
-// Bonus: Simple command execution endpoint (whitelisted for safety in POC)
-app.post('/api/command', (req, res) => {
-  const { command } = req.body;
-  
-  // Super basic whitelist - expand carefully!
-  const safeCommands = ['ls', 'pwd', 'whoami', 'date', 'echo hello from grok remote'];
-  
-  if (!safeCommands.some(safe => command.includes(safe))) {
-    return res.json({ 
-      response: `⚠️ Command "${command}" blocked for safety in this POC. Only safe demo commands allowed right now.` 
-    });
-  }
-
-  // In real version we'd use child_process.execSync here
-  const mockOutput = `Executed on PC: ${command}\nOutput: [Simulated] All good, command ran successfully.`;
-  
-  res.json({ response: mockOutput });
-});
-
-// === WebSocket Server for real-time updates ===
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`
-⏰ Grok Remote Backend LIVE on port ${PORT}
-   WebSocket real-time updates enabled
-   Access from phone: http://YOUR-PC-IP:${PORT}
-  `);
-});
-
-const wss = new WebSocketServer({ server });
-const clients = new Set();
-
-wss.on('connection', (ws) => {
-  clients.add(ws);
-  console.log('📱 New phone connected via WebSocket');
-
-  ws.on('message', (message) => {
-    try {
-      const data = JSON.parse(message.toString());
-      
-      if (data.type === 'chat') {
-        // Broadcast to other clients
-        clients.forEach(client => {
-          if (client !== ws && client.readyState === 1) {
-            client.send(JSON.stringify({
-              type: 'chat',
-              message: data.message
-            }));
-          }
-        });
-      }
-      
-      if (data.type === 'file_change') {
-        clients.forEach(client => {
-          if (client !== ws && client.readyState === 1) {
-            client.send(JSON.stringify({
-              type: 'file_change',
-              path: data.path
-            }));
-          }
-        });
-      }
-    } catch (e) {
-      console.log('WebSocket error:', e);
-    }
-  });
-
-  ws.on('close', () => {
-    clients.delete(ws);
-  });
-});
-
-app.locals.wss = wss;
