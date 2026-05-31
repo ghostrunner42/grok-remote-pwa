@@ -323,6 +323,7 @@
         </div>
         <button class="settings-btn" onclick="showSettings()">⚙️ Settings</button>
         <button class="settings-btn" onclick="startQRScan()" style="margin-left:8px; background:#222; color:#ff1a1a;">📷 Scan QR</button>
+        <button id="install-btn" class="settings-btn" onclick="installPWA()" style="margin-left:8px; background:#222; color:#22c55e; display:none;">📲 Install</button>
     </div>
 
     <!-- Tabs -->
@@ -415,23 +416,11 @@
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
-            // Show a subtle install hint after 10 seconds
-            setTimeout(() => {
-                if (deferredPrompt) {
-                    const hint = document.createElement('div');
-                    hint.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#222;color:#aaa;padding:8px 16px;border-radius:20px;font-size:12px;cursor:pointer;z-index:50;';
-                    hint.innerHTML = '📱 Add Grok Remote to home screen';
-                    hint.onclick = () => {
-                        deferredPrompt.prompt();
-                        deferredPrompt.userChoice.then(() => {
-                            hint.remove();
-                            deferredPrompt = null;
-                        });
-                    };
-                    document.body.appendChild(hint);
-                    setTimeout(() => hint.remove(), 8000);
-                }
-            }, 10000);
+            // Show the Install button
+            const installBtn = document.getElementById('install-btn');
+            if (installBtn) {
+                installBtn.style.display = 'inline-block';
+            }
         });
 
         // State
@@ -466,6 +455,20 @@
                 console.log('%c[WebSocket] Disconnected', 'color:#ef4444');
                 setTimeout(connectWebSocket, 3000);
             };
+        }
+
+        // PWA Install
+        function installPWA() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('User accepted the install prompt');
+                    }
+                    deferredPrompt = null;
+                    document.getElementById('install-btn').style.display = 'none';
+                });
+            }
         }
 
         // Load saved URL
