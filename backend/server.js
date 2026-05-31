@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const QRCode = require('qrcode');
+const fs = require('fs').promises;
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -85,6 +87,80 @@ app.get('/qr', async (req, res) => {
     `);
   } catch (err) {
     res.status(500).send('QR generation failed');
+  }
+});
+
+// === NEW: Remote File Browser (IDE-like view) ===
+// Safe base directory - only allow access inside /projects
+const PROJECTS_DIR = path.join(__dirname, 'projects');
+
+// Ensure projects folder exists
+fs.mkdir(PROJECTS_DIR, { recursive: true }).catch(() => {});
+
+app.get('/api/files', async (req, res) => {
+  try {
+    const requestedPath = req.query.path || '';
+    const safePath = path.join(PROJECTS_DIR, requestedPath);
+    
+    // Security: prevent path traversal
+    if (!safePath.startsWith(PROJECTS_DIR)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const stats = await fs.stat(safePath);
+    if (!stats.isDirectory()) {
+      return res.status(400).json({ error: 'Not a directory' });
+    }
+    
+    const files = await fs.readdir(safePath, { withFileTypes: true });
+    const result = files.map(file => ({
+      name: file.name,
+      isDirectory: file.isDirectory(),
+      path: path.join(requestedPath, file.name)
+    }));
+    
+    res.json({ 
+      currentPath: requestedPath || '/',
+      files: result 
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to list files' });
+  }
+});
+
+app.get('/api/read-file', async (req, res) => {
+  try {
+    const filePath = req.query.path;
+    if (!filePath) return res.status(400).json({ error: 'Path required' });
+    
+    const safePath = path.join(PROJECTS_DIR, filePath);
+    if (!safePath.startsWith(PROJECTS_DIR)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const content = await fs.readFile(safePath, 'utf8');
+    res.json({ path: filePath, content });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to read file' });
+  }
+});
+
+app.post('/api/write-file', async (req, res) => {
+  try {
+    const { path: filePath, content } = req.body;
+    if (!filePath || content === undefined) {
+      return res.status(400).json({ error: 'Path and content required' });
+    }
+    
+    const safePath = path.join(PROJECTS_DIR, filePath);
+    if (!safePath.startsWith(PROJECTS_DIR)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    await fs.writeFile(safePath, content, 'utf8');
+    res.json({ success: true, path: filePath });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to write file' });
   }
 });
 
