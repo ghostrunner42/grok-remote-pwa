@@ -35,6 +35,11 @@ app.get('/api/status', (req, res) => {
   });
 });
 
+// Redirect root to QR page (plug-and-play)
+app.get('/', (req, res) => {
+  res.redirect('/qr');
+});
+
 // === NEW: QR Code pairing endpoint (protected) ===
 app.get('/api/qr', requireAuth, async (req, res) => {
   try {

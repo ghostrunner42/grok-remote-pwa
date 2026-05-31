@@ -17,38 +17,28 @@ Think Claude computer-use, but built for xAI Grok and optimized for mobile.
 
 ---
 
-## Quick Start (Docker - Recommended)
+## Quick Start (3 Commands)
 
 ```bash
 git clone https://github.com/ghostrunner42/grok-remote-pwa.git
 cd grok-remote-pwa
-
-# Copy env and set your key
-cp .env.example .env
-# Edit .env and set GROK_REMOTE_KEY to something strong
-
 docker-compose up --build
 ```
 
-Then open `http://localhost:3000/qr` on your computer and scan with your phone.
+That's it.
 
----
+Open `http://localhost:3000` on your computer → beautiful QR code appears automatically.
 
-## Manual Start (Node.js)
+Scan it with your phone → instantly connected with full remote file browser.
 
-```bash
-cd backend
-npm install
-export GROK_REMOTE_KEY=your-secret-key-here
-node server.js
-```
+(Uses demo key by default. Change `GROK_REMOTE_KEY` in `.env` for production use.)
 
 ---
 
 ## How to Use
 
 1. Start the backend on your computer
-2. Open `http://YOUR-PC-IP:3000/qr` in your browser
+2. Open `http://YOUR-PC-IP:3000` in your browser
 3. On your phone, open the PWA (or scan the QR directly)
 4. Tap **📷 Scan QR** — connection is automatic
 5. Switch between **Chat** and **Files** tabs
