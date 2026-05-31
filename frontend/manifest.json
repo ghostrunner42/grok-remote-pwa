@@ -1,0 +1,23 @@
+{
+  "name": "Grok Remote",
+  "short_name": "GrokRemote",
+  "description": "Remote control Grok Build on your computer from your phone",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#ff1a1a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://via.placeholder.com/192x192/ff1a1a/ffffff?text=GR",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://via.placeholder.com/512x512/ff1a1a/ffffff?text=GR",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["productivity", "developer", "utilities"]
+}
