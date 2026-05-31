@@ -325,6 +325,12 @@
         <button class="settings-btn" onclick="startQRScan()" style="margin-left:8px; background:#222; color:#ff1a1a;">📷 Scan QR</button>
     </div>
 
+    <!-- Tabs -->
+    <div style="display:flex; background:#111; border-bottom:1px solid #222; padding:0 16px;">
+        <div onclick="switchTab('chat')" id="tab-chat" style="padding:12px 20px; font-weight:600; color:#ff1a1a; border-bottom:3px solid #ff1a1a; cursor:pointer;">💬 Chat</div>
+        <div onclick="switchTab('files')" id="tab-files" style="padding:12px 20px; font-weight:600; color:#888; cursor:pointer;">📁 Files</div>
+    </div>
+
     <!-- Chat -->
     <div class="chat-container" id="chat-container">
         <div class="welcome" id="welcome-screen">
@@ -332,6 +338,25 @@
             <p>You're now remotely controlling Grok Build. Type a prompt below to get started.</p>
             <p style="margin-top: 20px; font-size: 12px;">Try: "build me a simple todo app" or "what's the weather like in Dallas?"</p>
         </div>
+    </div>
+
+    <!-- Files Tab (hidden by default) -->
+    <div id="files-container" style="display:none; flex:1; overflow-y:auto; padding:16px; background:#0a0a0a;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div>
+                <span style="color:#888;">Current:</span> 
+                <span id="current-path" style="color:#fff; font-family:monospace;">/</span>
+            </div>
+            <button onclick="goBack()" style="background:#222; color:#fff; border:none; padding:6px 12px; border-radius:6px; font-size:13px;">← Back</button>
+        </div>
+        
+        <div id="file-list" style="background:#111; border-radius:12px; overflow:hidden;">
+            <!-- Populated by JS -->
+        </div>
+        
+        <p style="color:#555; font-size:12px; margin-top:16px; text-align:center;">
+            Only showing safe project files
+        </p>
     </div>
 
     <!-- Input -->
@@ -676,6 +701,150 @@
             if (html5QrcodeScanner) {
                 html5QrcodeScanner.clear().catch(() => {});
                 html5QrcodeScanner = null;
+            }
+        }
+
+        // === NEW: Tab switching + File Browser ===
+        let currentFilePath = '';
+
+        function switchTab(tab) {
+            const chatContainer = document.getElementById('chat-container');
+            const filesContainer = document.getElementById('files-container');
+            const inputArea = document.querySelector('.input-area');
+            const tabChat = document.getElementById('tab-chat');
+            const tabFiles = document.getElementById('tab-files');
+
+            if (tab === 'chat') {
+                chatContainer.style.display = 'block';
+                filesContainer.style.display = 'none';
+                inputArea.style.display = 'flex';
+                tabChat.style.color = '#ff1a1a';
+                tabChat.style.borderBottom = '3px solid #ff1a1a';
+                tabFiles.style.color = '#888';
+                tabFiles.style.borderBottom = 'none';
+            } else {
+                chatContainer.style.display = 'none';
+                filesContainer.style.display = 'block';
+                inputArea.style.display = 'none';
+                tabChat.style.color = '#888';
+                tabChat.style.borderBottom = 'none';
+                tabFiles.style.color = '#ff1a1a';
+                tabFiles.style.borderBottom = '3px solid #ff1a1a';
+                
+                // Load files when switching to tab
+                loadFiles();
+            }
+        }
+
+        async function loadFiles(path = '') {
+            const listEl = document.getElementById('file-list');
+            const pathEl = document.getElementById('current-path');
+            
+            listEl.innerHTML = '<div style="padding:20px; text-align:center; color:#666;">Loading...</div>';
+            
+            try {
+                const res = await fetch(`${backendURL}/api/files?path=${encodeURIComponent(path)}`);
+                const data = await res.json();
+                
+                pathEl.textContent = data.currentPath || '/';
+                currentFilePath = data.currentPath || '';
+                
+                if (!data.files || data.files.length === 0) {
+                    listEl.innerHTML = '<div style="padding:20px; color:#666; text-align:center;">Empty folder</div>';
+                    return;
+                }
+                
+                let html = '';
+                data.files.forEach(file => {
+                    const icon = file.isDirectory ? '📁' : '📄';
+                    const clickAction = file.isDirectory ? 
+                        `loadFiles('${file.path}')` : 
+                        `openFile('${file.path}')`;
+                    
+                    html += `
+                        <div onclick="${clickAction}" style="padding:14px 16px; border-bottom:1px solid #222; display:flex; align-items:center; gap:12px; cursor:pointer;">
+                            <span style="font-size:20px;">${icon}</span>
+                            <span style="flex:1; color:#eee;">${file.name}</span>
+                            ${file.isDirectory ? '<span style="color:#555; font-size:12px;">→</span>' : ''}
+                        </div>
+                    `;
+                });
+                
+                listEl.innerHTML = html;
+            } catch (err) {
+                listEl.innerHTML = `<div style="padding:20px; color:#ef4444;">Failed to load files. Is the backend running?</div>`;
+            }
+        }
+
+        function goBack() {
+            if (!currentFilePath || currentFilePath === '/') return;
+            
+            const parts = currentFilePath.split('/').filter(Boolean);
+            parts.pop();
+            const newPath = parts.join('/');
+            loadFiles(newPath);
+        }
+
+        async function openFile(filePath) {
+            try {
+                const res = await fetch(`${backendURL}/api/read-file?path=${encodeURIComponent(filePath)}`);
+                const data = await res.json();
+                
+                // Create modal for file editing
+                const modal = document.createElement('div');
+                modal.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); z-index:300; display:flex; align-items:center; justify-content:center;';
+                modal.innerHTML = `
+                    <div style="background:#1a1a1a; width:95%; max-width:600px; border-radius:16px; padding:20px; max-height:80vh; display:flex; flex-direction:column;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                            <h3 style="margin:0; color:#fff; font-size:16px;">${filePath}</h3>
+                            <button onclick="this.closest('.modal').remove()" style="background:none; border:none; color:#888; font-size:24px; cursor:pointer;">×</button>
+                        </div>
+                        
+                        <textarea id="file-content" style="flex:1; background:#111; color:#eee; border:1px solid #333; border-radius:8px; padding:12px; font-family:monospace; font-size:14px; resize:none;">${data.content}</textarea>
+                        
+                        <div style="margin-top:12px; display:flex; gap:10px;">
+                            <button onclick="saveFile('${filePath}', this)" style="flex:1; background:#ff1a1a; color:white; border:none; padding:12px; border-radius:8px; font-weight:600;">Save Changes</button>
+                            <button onclick="this.closest('.modal').remove()" style="flex:1; background:#333; color:#fff; border:none; padding:12px; border-radius:8px;">Close</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            } catch (err) {
+                alert('Failed to open file');
+            }
+        }
+
+        async function saveFile(filePath, btn) {
+            const textarea = document.getElementById('file-content');
+            const content = textarea.value;
+            
+            btn.textContent = 'Saving...';
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch(`${backendURL}/api/write-file`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: filePath, content })
+                });
+                
+                const result = await res.json();
+                if (result.success) {
+                    btn.textContent = '✅ Saved!';
+                    setTimeout(() => {
+                        btn.closest('.modal').remove();
+                        // Refresh file list
+                        loadFiles(currentFilePath);
+                    }, 800);
+                } else {
+                    alert('Save failed: ' + result.error);
+                    btn.textContent = 'Save Changes';
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                alert('Save failed');
+                btn.textContent = 'Save Changes';
+                btn.disabled = false;
             }
         }
 
