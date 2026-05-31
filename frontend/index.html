@@ -437,6 +437,36 @@
         // State
         let backendURL = localStorage.getItem('grokRemoteBackend') || 'http://192.168.1.42:3000';
         let isConnected = false;
+        let socket = null;
+        const getApiKey = () => localStorage.getItem('grokRemoteKey') || 'demo-key-2026';
+
+        function connectWebSocket() {
+            if (socket && socket.readyState === 1) return; // already connected
+
+            const wsUrl = backendURL.replace('http', 'ws') + '/ws';
+            socket = new WebSocket(wsUrl);
+
+            socket.onopen = () => {
+                console.log('%c[WebSocket] Connected', 'color:#22c55e');
+            };
+
+            socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'chat' && data.message) {
+                        addMessage('grok', data.message);
+                    }
+                    if (data.type === 'file_change') {
+                        console.log('File changed:', data.path);
+                    }
+                } catch (e) {}
+            };
+
+            socket.onclose = () => {
+                console.log('%c[WebSocket] Disconnected', 'color:#ef4444');
+                setTimeout(connectWebSocket, 3000);
+            };
+        }
 
         // Load saved URL
         function loadSettings() {
@@ -466,6 +496,7 @@
             try {
                 const res = await fetch(`${backendURL}/api/status`, { 
                     method: 'GET',
+                    headers: { 'x-api-key': getApiKey() },
                     signal: AbortSignal.timeout(4000)
                 });
                 if (res.ok) {
@@ -473,6 +504,10 @@
                     statusEl.innerHTML = `Connected • ${data.message.split(' ')[0]}`;
                     statusEl.style.color = '#22c55e';
                     isConnected = true;
+                    
+                    // Connect WebSocket for real-time chat
+                    connectWebSocket();
+                    
                     return true;
                 }
             } catch (e) {
@@ -551,7 +586,10 @@
             try {
                 const res = await fetch(`${backendURL}/api/chat`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'x-api-key': getApiKey()
+                    },
                     body: JSON.stringify({ prompt })
                 });
 
@@ -660,9 +698,12 @@
                     try {
                         const data = JSON.parse(decodedText);
                         if (data.url) {
-                            // Auto-connect
+                            // Auto-connect + save API key
                             backendURL = data.url;
                             localStorage.setItem('grokRemoteBackend', backendURL);
+                            if (data.key) {
+                                localStorage.setItem('grokRemoteKey', data.key);
+                            }
                             document.getElementById('backend-url').value = backendURL;
                             
                             stopQRScan();
@@ -743,7 +784,9 @@
             listEl.innerHTML = '<div style="padding:20px; text-align:center; color:#666;">Loading...</div>';
             
             try {
-                const res = await fetch(`${backendURL}/api/files?path=${encodeURIComponent(path)}`);
+                const res = await fetch(`${backendURL}/api/files?path=${encodeURIComponent(path)}`, {
+                    headers: { 'x-api-key': getApiKey() }
+                });
                 const data = await res.json();
                 
                 pathEl.textContent = data.currentPath || '/';
@@ -787,7 +830,9 @@
 
         async function openFile(filePath) {
             try {
-                const res = await fetch(`${backendURL}/api/read-file?path=${encodeURIComponent(filePath)}`);
+                const res = await fetch(`${backendURL}/api/read-file?path=${encodeURIComponent(filePath)}`, {
+                    headers: { 'x-api-key': getApiKey() }
+                });
                 const data = await res.json();
                 
                 // Create modal for file editing
@@ -824,7 +869,10 @@
             try {
                 const res = await fetch(`${backendURL}/api/write-file`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'x-api-key': getApiKey()
+                    },
                     body: JSON.stringify({ path: filePath, content })
                 });
                 
