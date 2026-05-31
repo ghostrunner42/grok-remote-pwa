@@ -3,6 +3,7 @@ const cors = require('cors');
 const QRCode = require('qrcode');
 const fs = require('fs').promises;
 const path = require('path');
+const { WebSocketServer } = require('ws');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -275,10 +276,56 @@ app.post('/api/command', (req, res) => {
   res.json({ response: mockOutput });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+// === WebSocket Server for real-time updates ===
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ⏰ Grok Remote Backend LIVE on port ${PORT}
-   Access from phone using your PC's local IP (e.g. http://192.168.1.XXX:${PORT})
-   Run: node server.js
+   WebSocket real-time updates enabled
+   Access from phone: http://YOUR-PC-IP:${PORT}
   `);
 });
+
+const wss = new WebSocketServer({ server });
+const clients = new Set();
+
+wss.on('connection', (ws) => {
+  clients.add(ws);
+  console.log('📱 New phone connected via WebSocket');
+
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message.toString());
+      
+      if (data.type === 'chat') {
+        // Broadcast to other clients
+        clients.forEach(client => {
+          if (client !== ws && client.readyState === 1) {
+            client.send(JSON.stringify({
+              type: 'chat',
+              message: data.message
+            }));
+          }
+        });
+      }
+      
+      if (data.type === 'file_change') {
+        clients.forEach(client => {
+          if (client !== ws && client.readyState === 1) {
+            client.send(JSON.stringify({
+              type: 'file_change',
+              path: data.path
+            }));
+          }
+        });
+      }
+    } catch (e) {
+      console.log('WebSocket error:', e);
+    }
+  });
+
+  ws.on('close', () => {
+    clients.delete(ws);
+  });
+});
+
+app.locals.wss = wss;
