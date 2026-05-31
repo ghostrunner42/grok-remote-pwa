@@ -1,0 +1,15 @@
+{
+  "name": "grok-remote-cli",
+  "version": "0.1.0",
+  "description": "CLI tool to start Grok Remote (mobile control for Grok Build)",
+  "main": "grok-remote.js",
+  "bin": {
+    "grok-remote": "./grok-remote.js"
+  },
+  "dependencies": {
+    "qrcode-terminal": "^0.12.0"
+  },
+  "scripts": {
+    "start": "node grok-remote.js"
+  }
+}

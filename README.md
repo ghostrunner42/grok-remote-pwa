@@ -35,6 +35,23 @@ Scan it with your phone → instantly connected with full remote file browser.
 
 ---
 
+## Future: One-Command from Grok CLI
+
+In the final version, this would be triggered directly from the Grok Build CLI:
+
+```bash
+grok remote
+```
+
+This would automatically:
+- Start the backend (Docker)
+- Display the QR code in your terminal
+- Open your browser to the pairing page
+
+See `cli/grok-remote.js` for a working proof-of-concept of this experience.
+
+---
+
 ## How to Use
 
 1. Start the backend on your computer
@@ -79,6 +96,7 @@ This could become a flagship mobile experience for Grok Build.
 - [x] Remote file browser + edit/save
 - [x] API key security
 - [x] Docker support
+- [x] CLI integration concept
 - [ ] WebSocket real-time updates
 - [ ] Voice input on mobile
 - [ ] Project templates ("build a Next.js app" → auto scaffold + open in phone)
