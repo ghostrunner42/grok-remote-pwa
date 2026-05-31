@@ -8,6 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Grok Remote</title>
     <link rel="manifest" href="manifest.json">
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap');
         
@@ -321,6 +322,7 @@
             </div>
         </div>
         <button class="settings-btn" onclick="showSettings()">⚙️ Settings</button>
+        <button class="settings-btn" onclick="startQRScan()" style="margin-left:8px; background:#222; color:#ff1a1a;">📷 Scan QR</button>
     </div>
 
     <!-- Chat -->
@@ -358,6 +360,18 @@
             <p style="font-size:11px; color:#555; margin-top:16px; text-align:center;">
                 Find your IP: Run <code>ipconfig</code> (Windows) or <code>ifconfig</code> (Mac/Linux) on your PC
             </p>
+        </div>
+    </div>
+
+    <!-- QR Scanner Modal -->
+    <div class="modal" id="qr-modal">
+        <div class="modal-content" style="max-width: 420px;">
+            <h3>📷 Scan QR Code</h3>
+            <p style="color:#888; font-size:13px; margin-bottom:12px;">Point your camera at the QR code shown on your PC</p>
+            
+            <div id="qr-reader" style="width:100%; max-width: 320px; margin: 0 auto; border-radius:12px; overflow:hidden;"></div>
+            
+            <button onclick="stopQRScan()" style="margin-top:16px; background:#333; color:#fff;">Cancel</button>
         </div>
     </div>
 
@@ -597,6 +611,72 @@
             });
 
             console.log('%c[Grok Remote] Ready. Phone → PC connection established (in spirit)', 'color:#22c55e');
+        }
+
+        // === NEW: QR Code Scanner ===
+        let html5QrcodeScanner = null;
+
+        function startQRScan() {
+            const modal = document.getElementById('qr-modal');
+            modal.style.display = 'flex';
+
+            const qrReader = document.getElementById('qr-reader');
+            qrReader.innerHTML = '';
+
+            html5QrcodeScanner = new Html5QrcodeScanner(
+                "qr-reader",
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                false
+            );
+
+            html5QrcodeScanner.render(
+                (decodedText) => {
+                    // Success! Parse the QR
+                    try {
+                        const data = JSON.parse(decodedText);
+                        if (data.url) {
+                            // Auto-connect
+                            backendURL = data.url;
+                            localStorage.setItem('grokRemoteBackend', backendURL);
+                            document.getElementById('backend-url').value = backendURL;
+                            
+                            stopQRScan();
+                            
+                            // Auto connect
+                            setTimeout(async () => {
+                                const connected = await checkConnection();
+                                if (connected) {
+                                    addMessage('grok', '✅ Connected via QR code! You\'re now remotely controlling Grok.');
+                                }
+                            }, 300);
+                        }
+                    } catch (e) {
+                        // Fallback: if it's just a plain URL
+                        if (decodedText.startsWith('http')) {
+                            backendURL = decodedText;
+                            localStorage.setItem('grokRemoteBackend', backendURL);
+                            document.getElementById('backend-url').value = backendURL;
+                            stopQRScan();
+                            setTimeout(() => checkConnection(), 300);
+                        } else {
+                            alert('Invalid QR code. Please scan the one from your PC.');
+                        }
+                    }
+                },
+                (error) => {
+                    // Ignore continuous errors
+                }
+            );
+        }
+
+        function stopQRScan() {
+            const modal = document.getElementById('qr-modal');
+            modal.style.display = 'none';
+            
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear().catch(() => {});
+                html5QrcodeScanner = null;
+            }
         }
 
         // Boot it up

@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const QRCode = require('qrcode');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,6 +19,73 @@ app.get('/api/status', (req, res) => {
     message: 'Grok Remote backend is running smooth on your PC',
     timestamp: new Date().toISOString()
   });
+});
+
+// === NEW: QR Code pairing endpoint ===
+app.get('/api/qr', async (req, res) => {
+  try {
+    // Get the actual host the request came from (works great on local network)
+    const host = req.get('host') || `localhost:${PORT}`;
+    const backendUrl = `http://${host}`;
+    
+    // Encode a simple JSON payload the PWA can parse
+    const qrPayload = JSON.stringify({
+      url: backendUrl,
+      token: 'grok-remote-demo-2026'  // In real version this would be a secure short-lived token
+    });
+    
+    const qrDataUrl = await QRCode.toDataURL(qrPayload, {
+      width: 300,
+      margin: 2,
+      color: {
+        dark: '#ff1a1a',
+        light: '#000000'
+      }
+    });
+    
+    res.json({
+      qr: qrDataUrl,
+      url: backendUrl,
+      instructions: 'Scan this with the Grok Remote PWA on your phone'
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to generate QR code' });
+  }
+});
+
+// Simple beautiful QR page (open this on your PC browser)
+app.get('/qr', async (req, res) => {
+  try {
+    const host = req.get('host') || `localhost:${PORT}`;
+    const backendUrl = `http://${host}`;
+    const qrPayload = JSON.stringify({ url: backendUrl, token: 'grok-remote-demo-2026' });
+    const qrDataUrl = await QRCode.toDataURL(qrPayload, { width: 400, margin: 2 });
+    
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Grok Remote • Pair</title>
+        <style>
+          body { background: #0a0a0a; color: white; font-family: system-ui; text-align: center; padding: 40px; }
+          .qr-container { background: #111; padding: 30px; border-radius: 20px; display: inline-block; margin: 20px 0; }
+          h1 { color: #ff1a1a; }
+        </style>
+      </head>
+      <body>
+        <h1>🔥 Grok Remote Pairing</h1>
+        <p>Open the Grok Remote PWA on your phone and tap <strong>"Scan QR"</strong></p>
+        <div class="qr-container">
+          <img src="${qrDataUrl}" alt="QR Code" style="max-width: 100%;">
+        </div>
+        <p style="color:#888; font-size:14px;">${backendUrl}</p>
+        <p style="margin-top:30px; font-size:13px; color:#555;">This QR expires when you restart the server</p>
+      </body>
+      </html>
+    `);
+  } catch (err) {
+    res.status(500).send('QR generation failed');
+  }
 });
 
 // Main chat endpoint - this is where the magic happens
