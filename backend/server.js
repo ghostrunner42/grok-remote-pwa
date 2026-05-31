@@ -1,0 +1,127 @@
+const express = require('express');
+const cors = require('cors');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(cors()); // Allow requests from your phone on the same network
+app.use(express.json());
+
+// Simple in-memory chat history (per session - we can expand later)
+let chatHistory = [];
+
+// Health check
+app.get('/api/status', (req, res) => {
+  res.json({ 
+    status: 'online', 
+    message: 'Grok Remote backend is running smooth on your PC',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Main chat endpoint - this is where the magic happens
+app.post('/api/chat', async (req, res) => {
+  const { prompt, sessionId = 'default' } = req.body;
+
+  if (!prompt || prompt.trim() === '') {
+    return res.status(400).json({ error: 'Prompt is required, bro' });
+  }
+
+  console.log(`📱 Phone sent prompt: "${prompt}"`);
+
+  // TODO: Real xAI Grok API integration
+  // 1. Get your API key from https://console.x.ai
+  // 2. Uncomment the fetch block below and add your key
+  // 3. The API is OpenAI-compatible: https://api.x.ai/v1/chat/completions
+  //
+  // Example real integration:
+  /*
+  try {
+    const xaiResponse = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.XAI_API_KEY || 'YOUR_KEY_HERE'}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'grok-2-1212',  // or 'grok-beta' / whatever the current model is
+        messages: [
+          { role: 'system', content: 'You are Grok, built by xAI. Be helpful, maximally truthful, and a bit based. The user is controlling you remotely from their phone via this PWA.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000
+      })
+    });
+
+    const data = await xaiResponse.json();
+    if (!xaiResponse.ok) throw new Error(data.error?.message || 'API error');
+    
+    const grokReply = data.choices[0].message.content;
+    chatHistory.push({ role: 'user', content: prompt });
+    chatHistory.push({ role: 'assistant', content: grokReply });
+    
+    return res.json({ 
+      response: grokReply,
+      sessionId 
+    });
+  } catch (error) {
+    console.error('xAI API error:', error);
+    return res.status(500).json({ 
+      error: 'Grok API call failed. Check your key and internet.',
+      fallback: true 
+    });
+  }
+  */
+
+  // === MOCK MODE (for testing without API key) ===
+  // Simulate Grok thinking...
+  await new Promise(resolve => setTimeout(resolve, 800));
+
+  let mockReply = `🔥 Grok here from your PC! Got your prompt: "${prompt}"\n\n`;
+
+  if (prompt.toLowerCase().includes('build') || prompt.toLowerCase().includes('create')) {
+    mockReply += `Hell yeah, let's build that! In the real version I'd generate the full code and drop it into a /projects folder on this computer. What tech stack you want? React? Next.js? Plain HTML?`;
+  } else if (prompt.toLowerCase().includes('hello') || prompt.toLowerCase().includes('hi')) {
+    mockReply += `What's good? Your phone is now wirelessly controlling me on this rig. Feels like the future, right?`;
+  } else {
+    mockReply += `Solid prompt. In a full build I'd hit the real xAI API and give you a fire response. For now, imagine I just wrote you some killer code or ran a build command. What's next on the agenda?`;
+  }
+
+  chatHistory.push({ role: 'user', content: prompt });
+  chatHistory.push({ role: 'assistant', content: mockReply });
+
+  res.json({ 
+    response: mockReply,
+    sessionId,
+    note: 'This is mock mode. Add your XAI_API_KEY to use real Grok.'
+  });
+});
+
+// Bonus: Simple command execution endpoint (whitelisted for safety in POC)
+app.post('/api/command', (req, res) => {
+  const { command } = req.body;
+  
+  // Super basic whitelist - expand carefully!
+  const safeCommands = ['ls', 'pwd', 'whoami', 'date', 'echo hello from grok remote'];
+  
+  if (!safeCommands.some(safe => command.includes(safe))) {
+    return res.json({ 
+      response: `⚠️ Command "${command}" blocked for safety in this POC. Only safe demo commands allowed right now.` 
+    });
+  }
+
+  // In real version we'd use child_process.execSync here
+  const mockOutput = `Executed on PC: ${command}\nOutput: [Simulated] All good, command ran successfully.`;
+  
+  res.json({ response: mockOutput });
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`
+⏰ Grok Remote Backend LIVE on port ${PORT}
+   Access from phone using your PC's local IP (e.g. http://192.168.1.XXX:${PORT})
+   Run: node server.js
+  `);
+});
