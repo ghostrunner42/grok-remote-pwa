@@ -1,0 +1,16 @@
+node_modules/
+npm-debug.log*
+.DS_Store
+.env
+.env.*
+!.env.example
+*.log
+.idea/
+.vscode/
+dist/
+coverage/
+# local pair dumps / secrets
+/tmp/
+*.pem
+auth.json
+.grok-remote/

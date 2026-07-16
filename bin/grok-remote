@@ -1,0 +1,23 @@
+#!/usr/bin/env node
+/**
+ * grok-remote — one-command mobile remote for official Grok Build.
+ *
+ *   cd ~/your-project
+ *   grok-remote
+ */
+const path = require("path");
+const { spawn } = require("child_process");
+
+const launcher = path.resolve(__dirname, "../launcher.js");
+const child = spawn(process.execPath, [launcher, ...process.argv.slice(2)], {
+  stdio: "inherit",
+  env: process.env,
+  cwd: process.cwd(),
+});
+
+child.on("exit", (code, signal) => {
+  if (signal) {
+    try { process.kill(process.pid, signal); } catch (_) {}
+  }
+  process.exit(code == null ? 1 : code);
+});

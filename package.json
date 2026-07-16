@@ -1,0 +1,39 @@
+{
+  "name": "grok-remote",
+  "version": "0.4.0",
+  "description": "Mobile remote control for official SpaceXAI Grok Build (ACP + terminal bridge)",
+  "private": false,
+  "license": "MIT",
+  "author": "ghostrunner42",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ghostrunner42/grok-remote-pwa.git"
+  },
+  "bin": {
+    "grok-remote": "bin/grok-remote"
+  },
+  "scripts": {
+    "start": "node launcher.js",
+    "launch": "node launcher.js",
+    "e2e": "node e2e-test.js",
+    "verify-pair": "node verify-pair.js",
+    "spike": "node spike.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "grok",
+    "xai",
+    "spacexai",
+    "acp",
+    "pwa",
+    "remote",
+    "coding-agent"
+  ],
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0",
+    "ws": "^8.18.0"
+  }
+}

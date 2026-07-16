@@ -1,120 +1,170 @@
 # Grok Remote
 
-**Mobile-first remote control for Grok Build** — Scan a QR code on your computer and instantly control Grok from your phone with a full remote file browser.
+**Unofficial community companion** for [SpaceXAI Grok Build](https://x.ai/cli): drive the real desktop agent from your phone (or any browser) over the local network.
 
-Think Claude computer-use, but built for xAI Grok and optimized for mobile.
+```bash
+cd ~/your-project
+grok-remote
+# Phone (same Wi‑Fi): open the join URL / scan the QR
+```
 
----
-
-## ✨ Features
-
-- **QR Code Pairing** — One-tap connection from phone to PC
-- **Remote Chat** — Talk to Grok from your phone while it runs on your computer
-- **Remote File Browser** — Browse, open, edit, and save files directly from your phone (safe sandboxed to `/projects`)
-- **API Key Security** — Protected endpoints with simple key-based auth
-- **PWA** — Installable on iOS and Android home screen
-- **Docker Ready** — One-command deployment
+Not affiliated with or endorsed by xAI / SpaceXAI. Requires the official `grok` CLI installed and logged in on your computer.
 
 ---
 
-## Quick Start (3 Commands)
+## Features
+
+- **QR / join URL pairing** — phone camera opens `http://LAN:3020/join`
+- **Real Grok Build agent** via ACP (`grok agent serve`), not a mock chat API
+- **Project cwd** = the directory where you launched `grok-remote`
+- **Shell on the desktop** — terminal bridge so agent shell tools work from the phone
+- **Files** — browse/read/write via agent FS extensions
+- **PWA-friendly** — installable UI; works offline from the LAN host (no CDN)
+
+---
+
+## Prerequisites
+
+| Requirement | Notes |
+|-------------|--------|
+| **Node.js 18+** | For the launcher + PWA server |
+| **`grok` CLI** | [Install](https://x.ai/cli) and run `grok login` once |
+| **Same Wi‑Fi** | Phone and PC on the same LAN (not guest isolation if possible) |
+
+Check:
+
+```bash
+node -v
+grok --version
+grok models   # should show you are logged in
+```
+
+---
+
+## Install
 
 ```bash
 git clone https://github.com/ghostrunner42/grok-remote-pwa.git
 cd grok-remote-pwa
-docker-compose up --build
+npm install
+npm link          # puts `grok-remote` on your PATH (optional)
 ```
 
-That's it.
-
-Open `http://localhost:3000` on your computer → beautiful QR code appears automatically.
-
-Scan it with your phone → instantly connected with full remote file browser.
-
-(Uses demo key by default. Change `GROK_REMOTE_KEY` in `.env` for production use.)
-
----
-
-## Future: One-Command from Grok CLI
-
-In the final version, this would be triggered directly from the Grok Build CLI:
+Without linking:
 
 ```bash
-grok remote
+node /path/to/grok-remote-pwa/launcher.js
+# or
+npx --yes --prefix /path/to/grok-remote-pwa grok-remote
 ```
 
-This would automatically:
-- Start the backend (Docker)
-- Display the QR code in your terminal
-- Open your browser to the pairing page
+---
 
-See `cli/grok-remote.js` for a working proof-of-concept of this experience.
+## Usage
+
+```bash
+cd ~/Documents/MyProject   # agent workspace = this directory
+grok-remote
+```
+
+Then on your phone:
+
+1. Open **`http://<printed-lan-ip>:3020/join`** (or scan the QR — it encodes that URL)
+2. You should land in the app with status like **ACP · grok-4.5**
+3. Chat, run tools, browse **Files**
+
+Stop with **Ctrl+C** in the terminal.
+
+### Flags
+
+```bash
+grok-remote --cwd /path/to/project
+grok-remote --host 192.168.1.42      # force LAN IP if auto-detect is wrong
+grok-remote --port 2419              # agent WebSocket port
+grok-remote --http-port 3020         # pair page + PWA
+grok-remote --secret my-token        # or GROK_AGENT_SECRET
+grok-remote --no-approve             # do not pass --always-approve to agent
+grok-remote --no-open                # don’t open the pair page in a browser
+grok-remote --localhost              # 127.0.0.1 only (phones cannot connect)
+```
 
 ---
 
-## How to Use
+## Network / VPN
 
-1. Start the backend on your computer
-2. Open `http://YOUR-PC-IP:3000` in your browser
-3. On your phone, open the PWA (or scan the QR directly)
-4. Tap **📷 Scan QR** — connection is automatic
-5. Switch between **Chat** and **Files** tabs
+If the join page works on the PC but **not on the phone**:
 
-In the Files tab you can:
-- Browse folders
-- Open and edit files
-- Save changes back to your PC in real time
+**NordVPN (common):** kill switch blocks LAN inbound.
 
----
+```bash
+nordvpn set lan-discovery enable
+nordvpn allowlist add port 3020
+nordvpn allowlist add port 2419
+# or: nordvpn disconnect
+```
 
-## Security
+Also check:
 
-- All sensitive endpoints require an API key
-- File access is sandboxed to the `projects/` directory only
-- Never expose this publicly without proper auth + HTTPS
+- Same SSID (not guest Wi‑Fi with client isolation)
+- Host firewall allowing TCP **3020** and **2419**
+- Phone VPN off
 
 ---
 
-## Why This Matters for xAI
+## Architecture
 
-This is a complete, working prototype of **mobile remote development for Grok**.
+```
+Phone PWA  ── WebSocket ACP ──►  grok agent serve  (official CLI)
+    │                                    │
+    └── terminal/*  ──HTTP──►  launcher (shell on PC, project cwd)
+```
 
-Key advantages:
-- Extremely low friction onboarding (QR scan)
-- Real file system access from phone
-- Designed to work with future Grok computer-use features
-- Minimal new infrastructure required
-- Feels native to how developers actually work
-
-This could become a flagship mobile experience for Grok Build.
-
----
-
-## Roadmap (Community + xAI)
-
-- [x] QR pairing
-- [x] Remote file browser + edit/save
-- [x] API key security
-- [x] Docker support
-- [x] CLI integration concept
-- [ ] WebSocket real-time updates
-- [ ] Voice input on mobile
-- [ ] Project templates ("build a Next.js app" → auto scaffold + open in phone)
-- [ ] Full Claude-style computer use integration (when available)
+| Path | Role |
+|------|------|
+| `bin/grok-remote` | CLI entry |
+| `launcher.js` | Starts agent + HTTP + QR + terminal bridge |
+| `lib/acp-client.js` | ACP client (browser + Node) |
+| `lib/terminal-bridge.js` | Desktop shell host |
+| `lib/pair.js` | Pair payload v1 |
+| `frontend/` | PWA UI |
+| `legacy/` | Old Docker/Express mock (deprecated) |
 
 ---
 
-## Contributing
+## Security (short version)
 
-This started as a proof-of-concept. Pull requests welcome!
-
-Especially looking for:
-- Better mobile UX
-- More secure auth (JWT, etc.)
-- Integration with real xAI API streaming
+This grants **remote agent control of your machine** on the LAN. Do not expose ports to the public internet. See [SECURITY.md](./SECURITY.md).
 
 ---
 
-**Built with ❤️ for the xAI community**
+## Development / tests
 
-*“The best way to predict the future is to build it.”* — and then control it from your phone.
+```bash
+# terminal A
+npm start
+
+# terminal B (with launcher running)
+npm run e2e
+npm run verify-pair
+```
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| `grok: command not found` | Install CLI from https://x.ai/cli |
+| Auth / login errors | Run `grok login` on the desktop |
+| Phone can’t load join URL | VPN/firewall/LAN isolation (see above) |
+| Blank app / old UI | Hard-refresh `/app/` or re-open `/join` |
+| Shell tools fail | Ensure launcher is up (terminal bridge); re-join after upgrade |
+| Chat not in TUI | Expected — phone uses `agent serve`, a separate session from interactive `grok` |
+
+---
+
+## License
+
+MIT — see [LICENSE](./LICENSE).
+
+Grok Build and SpaceXAI marks belong to their respective owners. This project is a community companion.
