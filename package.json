@@ -1,6 +1,6 @@
 {
   "name": "grok-remote",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "homepage": "https://github.com/ghostrunner42/grok-remote-pwa",
   "description": "Mobile remote control for official SpaceXAI Grok Build (ACP + terminal bridge)",
   "private": false,
@@ -10,15 +10,33 @@
     "type": "git",
     "url": "https://github.com/ghostrunner42/grok-remote-pwa.git"
   },
+  "bugs": {
+    "url": "https://github.com/ghostrunner42/grok-remote-pwa/issues"
+  },
   "bin": {
     "grok-remote": "bin/grok-remote"
   },
+  "main": "launcher.js",
+  "files": [
+    "bin/",
+    "frontend/",
+    "lib/",
+    "docs/overview.png",
+    "docs/overview.svg",
+    "launcher.js",
+    "LICENSE",
+    "README.md",
+    "SECURITY.md",
+    "CHANGELOG.md",
+    "docs/LEADER_ATTACH_SPIKE.md"
+  ],
   "scripts": {
     "start": "node launcher.js",
     "launch": "node launcher.js",
     "e2e": "node e2e-test.js",
     "verify-pair": "node verify-pair.js",
-    "spike": "node spike.js"
+    "spike": "node spike.js",
+    "prepack": "node -e \"require('fs').accessSync('launcher.js'); require('fs').accessSync('frontend/index.html')\""
   },
   "engines": {
     "node": ">=18"

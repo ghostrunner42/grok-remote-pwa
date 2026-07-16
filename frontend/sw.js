@@ -1,9 +1,10 @@
 /* Grok Remote service worker — cache app shell for install / offline shell */
-const CACHE = "grok-remote-v0.4.0";
+const CACHE = "grok-remote-v0.5.0";
 const SHELL = [
   "./",
   "./index.html",
   "./remote-app.js",
+  "./pwa-detect.js",
   "./manifest.json",
   "./sw.js",
   "./assets/favicon.png",

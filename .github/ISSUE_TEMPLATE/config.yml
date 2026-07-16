@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security concerns
+    url: https://github.com/ghostrunner42/grok-remote-pwa/blob/main/SECURITY.md
+    about: Read SECURITY.md before exposing ports beyond your LAN

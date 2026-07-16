@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="420" viewBox="0 0 960 420" role="img" aria-label="Grok Remote overview: desktop launcher pairs with phone PWA over LAN">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0A0A0C"/>
+      <stop offset="100%" stop-color="#141418"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FF2D2D"/>
+      <stop offset="100%" stop-color="#FF6B6B"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <rect width="960" height="420" rx="24" fill="url(#bg)"/>
+  <rect x="1" y="1" width="958" height="418" rx="24" fill="none" stroke="#2A2A32" stroke-width="1"/>
+
+  <!-- Title -->
+  <text x="48" y="48" fill="#A1A1AA" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" letter-spacing="2">SPACEXAI COMMUNITY</text>
+  <text x="48" y="82" fill="#FAFAFA" font-family="ui-sans-serif, system-ui, sans-serif" font-size="28" font-weight="700">Grok Remote</text>
+  <text x="48" y="112" fill="#71717A" font-family="ui-sans-serif, system-ui, sans-serif" font-size="15">Drive official Grok Build from your phone on the LAN</text>
+
+  <!-- Desktop card -->
+  <g filter="url(#soft)">
+    <rect x="48" y="150" width="300" height="210" rx="16" fill="#18181B" stroke="#2A2A32"/>
+  </g>
+  <rect x="48" y="150" width="300" height="40" rx="16" fill="#1F1F24"/>
+  <rect x="48" y="174" width="300" height="16" fill="#1F1F24"/>
+  <text x="68" y="176" fill="#E4E4E7" font-family="ui-monospace, monospace" font-size="13">$ grok-remote</text>
+  <text x="68" y="210" fill="#34D399" font-family="ui-monospace, monospace" font-size="12">Grok Remote v0.4.1</text>
+  <text x="68" y="232" fill="#A1A1AA" font-family="ui-monospace, monospace" font-size="12">grok: 0.2.x · node 18+</text>
+  <text x="68" y="254" fill="#A1A1AA" font-family="ui-monospace, monospace" font-size="12">cwd:  ~/your-project</text>
+  <text x="68" y="276" fill="#A1A1AA" font-family="ui-monospace, monospace" font-size="12">join: http://LAN:3020/join</text>
+  <!-- Mini QR -->
+  <rect x="250" y="292" width="72" height="48" rx="6" fill="#FAFAFA"/>
+  <g fill="#0A0A0C">
+    <rect x="258" y="300" width="10" height="10"/>
+    <rect x="272" y="300" width="10" height="10"/>
+    <rect x="286" y="300" width="10" height="10"/>
+    <rect x="300" y="300" width="10" height="10"/>
+    <rect x="258" y="314" width="10" height="10"/>
+    <rect x="286" y="314" width="10" height="10"/>
+    <rect x="300" y="314" width="10" height="10"/>
+    <rect x="272" y="328" width="10" height="10"/>
+    <rect x="286" y="328" width="10" height="10"/>
+  </g>
+  <text x="68" y="330" fill="#71717A" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12">Desktop · agent serve + QR</text>
+
+  <!-- Arrow -->
+  <path d="M370 255 H430" stroke="url(#accent)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M422 247 L434 255 L422 263" fill="none" stroke="#FF4D4D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="372" y="240" fill="#A1A1AA" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11">same Wi‑Fi</text>
+
+  <!-- Phone card -->
+  <g filter="url(#soft)">
+    <rect x="450" y="150" width="200" height="210" rx="22" fill="#18181B" stroke="#2A2A32"/>
+  </g>
+  <rect x="470" y="168" width="160" height="8" rx="4" fill="#2A2A32"/>
+  <circle cx="620" cy="172" r="3" fill="#3F3F46"/>
+  <text x="470" y="210" fill="#FAFAFA" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14" font-weight="600">Grok Remote</text>
+  <text x="470" y="230" fill="#34D399" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11">● ACP · grok-4.5</text>
+  <rect x="470" y="248" width="140" height="28" rx="14" fill="#FF2D2D"/>
+  <text x="490" y="266" fill="#0A0A0C" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="600">You · prompt</text>
+  <rect x="470" y="286" width="160" height="36" rx="12" fill="#27272A"/>
+  <text x="482" y="308" fill="#E4E4E7" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11">Grok · tools + reply</text>
+  <text x="470" y="342" fill="#71717A" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11">Phone PWA · history kept</text>
+
+  <!-- Agent card -->
+  <g filter="url(#soft)">
+    <rect x="690" y="150" width="222" height="210" rx="16" fill="#18181B" stroke="#2A2A32"/>
+  </g>
+  <text x="710" y="190" fill="#FAFAFA" font-family="ui-sans-serif, system-ui, sans-serif" font-size="15" font-weight="600">Official agent</text>
+  <text x="710" y="218" fill="#A1A1AA" font-family="ui-monospace, monospace" font-size="12">grok agent serve</text>
+  <text x="710" y="248" fill="#A1A1AA" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12">• ACP WebSocket</text>
+  <text x="710" y="270" fill="#A1A1AA" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12">• Files &amp; shell on PC</text>
+  <text x="710" y="292" fill="#A1A1AA" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12">• Project cwd</text>
+  <text x="710" y="330" fill="#71717A" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11">Not a mock chat API</text>
+
+  <!-- Link phone to agent -->
+  <path d="M650 255 H678" stroke="#3F3F46" stroke-width="2" stroke-dasharray="4 4"/>
+  <path d="M670 247 L682 255 L670 263" fill="none" stroke="#52525B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

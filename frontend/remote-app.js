@@ -7,6 +7,9 @@
   const SESSION_STORAGE_KEY = "grokRemoteSessionId";
   const PERM_MODE_KEY = "grokRemotePermMode";
   const INSTALL_DISMISS_KEY = "grokRemoteInstallDismissed";
+  const CHAT_HISTORY_KEY = "grokRemoteChatHistoryV1";
+  const MAX_CHAT_HISTORY = 80;
+  const APP_VERSION = "0.5.0";
 
   let pairPayload = null;
   let isConnected = false;
@@ -21,6 +24,7 @@
   let allFiles = [];
   let html5QrcodeScanner = null;
   let deferredPrompt = null;
+  let historyRestored = false;
   let permissionMode = localStorage.getItem(PERM_MODE_KEY) || "auto";
 
   // ---------- DOM helpers ----------
@@ -83,8 +87,121 @@
   }
 
   function savePairToStorage(payload) {
+    const prev = pairPayload || loadPairFromStorage();
     pairPayload = payload;
     localStorage.setItem(PAIR_STORAGE_KEY, JSON.stringify(payload));
+    // New host/cwd/secret → different history bucket; allow re-restore
+    if (
+      prev &&
+      (prev.cwd !== payload.cwd ||
+        prev.secret !== payload.secret ||
+        prev.host !== payload.host)
+    ) {
+      historyRestored = false;
+    }
+  }
+
+  // ---------- Chat history (local, survives reconnect / app reopen) ----------
+  function historyBucketKey(payload) {
+    const p = payload || pairPayload || loadPairFromStorage();
+    if (!p) return `${CHAT_HISTORY_KEY}:nopair`;
+    const host = p.host || (() => {
+      try {
+        return new URL(p.ws).hostname;
+      } catch {
+        return "local";
+      }
+    })();
+    const secretHint = String(p.secret || "").slice(0, 12);
+    return `${CHAT_HISTORY_KEY}:${host}:${p.cwd || ""}:${secretHint}`;
+  }
+
+  function loadChatHistory(payload) {
+    try {
+      const raw = localStorage.getItem(historyBucketKey(payload));
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      console.warn("load chat history", e);
+      return [];
+    }
+  }
+
+  function saveChatHistory(entries, payload) {
+    try {
+      const trimmed = entries.slice(-MAX_CHAT_HISTORY);
+      localStorage.setItem(historyBucketKey(payload), JSON.stringify(trimmed));
+    } catch (e) {
+      console.warn("save chat history", e);
+    }
+  }
+
+  function appendChatHistory(entry, payload) {
+    if (!entry || !entry.role) return;
+    const text = String(entry.text || "");
+    if (!text.trim() && !(entry.tools && entry.tools.length)) return;
+    const list = loadChatHistory(payload);
+    list.push({
+      role: entry.role,
+      text,
+      tools: Array.isArray(entry.tools) ? entry.tools.slice(0, 24) : undefined,
+      ts: entry.ts || Date.now(),
+    });
+    saveChatHistory(list, payload);
+  }
+
+  function clearChatHistoryStorage(payload) {
+    try {
+      localStorage.removeItem(historyBucketKey(payload));
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function clearChatDom() {
+    const container = $("chat-container");
+    if (!container) return;
+    container.querySelectorAll(".message").forEach((el) => el.remove());
+  }
+
+  function restoreChatHistory(payload) {
+    if (historyRestored) return 0;
+    historyRestored = true;
+    const list = loadChatHistory(payload);
+    if (!list.length) return 0;
+    hideWelcome();
+    for (const m of list) {
+      if (m.role === "user") {
+        addMessage("user", m.text || "", { persist: false });
+      } else {
+        const msgDiv = addMessage("grok", m.text || "", { persist: false });
+        if (msgDiv && m.tools && m.tools.length) {
+          const body = msgDiv.querySelector(".message-body");
+          if (body) {
+            const toolsEl = document.createElement("div");
+            toolsEl.className = "tool-log";
+            toolsEl.style.display = "block";
+            toolsEl.style.marginBottom = "6px";
+            for (const label of m.tools) {
+              const card = document.createElement("div");
+              card.style.cssText =
+                "background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-bottom:4px;font-size:11px;color:var(--text-dim);font-family:var(--font-mono);";
+              card.innerHTML = `<span style="color:var(--accent);">›</span> ${escapeHtml(
+                String(label)
+              )}`;
+              toolsEl.appendChild(card);
+            }
+            const bubble = body.querySelector(".message-bubble");
+            if (bubble) body.insertBefore(toolsEl, bubble);
+            else body.appendChild(toolsEl);
+          }
+        }
+      }
+    }
+    const container = $("chat-container");
+    if (container) container.scrollTop = container.scrollHeight;
+    return list.length;
   }
 
   // ---------- Permission UI ----------
@@ -177,6 +294,15 @@
     isConnected = false;
   }
 
+  function hasLiveSession() {
+    return !!(
+      isConnected &&
+      acpClient &&
+      acpClient.ready &&
+      (acpSessionId || acpClient.sessionId)
+    );
+  }
+
   function scheduleReconnect(reason) {
     if (intentionalClose || reconnecting) return;
     if (!pairPayload && !loadPairFromStorage()) return;
@@ -231,20 +357,75 @@
     };
 
     await client.connect({ timeoutMs: 8000 });
+
+    // Resume priority:
+    // 1) pair.sessionId from launcher (--session / -c) — desktop attach target
+    // 2) in-memory / localStorage phone session (reconnect)
+    const pairSessionId = payload.sessionId || payload.session_id || null;
+    const storedId = localStorage.getItem(SESSION_STORAGE_KEY) || null;
+    if (pairSessionId && storedId && pairSessionId !== storedId) {
+      // New desktop attach target wins over a stale phone session
+      console.log(
+        "[acp] pair sessionId differs from stored; preferring pair:",
+        pairSessionId
+      );
+    }
     const resumeId =
-      acpSessionId || localStorage.getItem(SESSION_STORAGE_KEY) || null;
-    const { initResult, session } = await client.handshake({
-      cwd: payload.cwd,
-      createSession: true,
-      resumeSessionId: resumeId,
-    });
+      pairSessionId || acpSessionId || storedId || null;
+    const attachedFromPair = !!(pairSessionId && resumeId === pairSessionId);
+
+    let initResult;
+    let session;
+    let usedResume = !!resumeId;
+    try {
+      ({ initResult, session } = await client.handshake({
+        cwd: payload.cwd,
+        createSession: true,
+        resumeSessionId: resumeId,
+      }));
+    } catch (err) {
+      // Stale resume id can poison the handshake — drop and retry once fresh
+      const msg = String(err.message || err);
+      if (resumeId && /session|load|handshake|auth/i.test(msg)) {
+        console.warn("[acp] handshake failed with resume, retrying fresh:", msg);
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        acpSessionId = null;
+        usedResume = false;
+        ({ initResult, session } = await client.handshake({
+          cwd: payload.cwd,
+          createSession: true,
+          resumeSessionId: null,
+        }));
+      } else {
+        throw err;
+      }
+    }
+
+    const sid =
+      (typeof window.GrokAcpExtractSessionId === "function"
+        ? window.GrokAcpExtractSessionId(session, client.sessionId || resumeId)
+        : null) ||
+      session?.sessionId ||
+      session?.session_id ||
+      session?._meta?.sessionId ||
+      client.sessionId ||
+      null;
+
+    if (!sid) {
+      throw new Error("Connected but no session id — handshake incomplete");
+    }
+
+    // Detect whether we actually resumed vs got a new session after failed load
+    const resumed =
+      usedResume &&
+      resumeId &&
+      String(sid) === String(resumeId);
 
     acpClient = client;
     agentMeta = initResult;
-    acpSessionId = session?.sessionId || session?.session_id || null;
-    if (acpSessionId) {
-      localStorage.setItem(SESSION_STORAGE_KEY, acpSessionId);
-    }
+    acpSessionId = sid;
+    client.sessionId = sid;
+    localStorage.setItem(SESSION_STORAGE_KEY, acpSessionId);
     isConnected = true;
     pairPayload = payload;
 
@@ -252,20 +433,44 @@
       initResult?._meta?.modelState?.currentModelId ||
       session?.models?.currentModelId ||
       "";
-    setStatus(model ? `ACP • ${model}` : "ACP connected", "#22c55e");
+    if (resumed && attachedFromPair) {
+      setStatus(model ? `ACP • ${model} • attached` : "ACP attached", "#22c55e");
+    } else if (resumed) {
+      setStatus(model ? `ACP • ${model}` : "ACP connected", "#22c55e");
+    } else {
+      setStatus(model ? `ACP • ${model}` : "ACP connected", "#22c55e");
+    }
 
     const detail = $("pair-status-detail");
     if (detail) {
-      detail.textContent = `cwd: ${payload.cwd}\nsession: ${acpSessionId || "—"}\nws: ${payload.ws}\nperm: ${permissionMode}\nbridge: ${bridgeBase}`;
+      detail.textContent = [
+        `cwd: ${payload.cwd}`,
+        `session: ${acpSessionId || "—"}`,
+        `attach: ${
+          resumed
+            ? attachedFromPair
+              ? "desktop session (pair.sessionId)"
+              : "phone resume"
+            : "new session"
+        }`,
+        `ws: ${payload.ws}`,
+        `perm: ${permissionMode}`,
+        `bridge: ${bridgeBase}`,
+      ].join("\n");
     }
-    return { initResult, session };
+    return { initResult, session, resumed, attachedFromPair };
   }
 
   async function ensureConnected(reason) {
-    if (reconnecting) return isConnected;
-    if (isConnected && acpClient && acpClient.ready) return true;
+    if (reconnecting) return hasLiveSession();
+    if (hasLiveSession()) return true;
     reconnecting = true;
     try {
+      // Prefer a fresh live pair from the launcher (handles secret rotation)
+      if (reason && /visibility|pageshow|focus|online|send|timer/i.test(reason)) {
+        const live = await tryFetchLivePair();
+        if (live) pairPayload = live;
+      }
       return await checkConnection();
     } finally {
       reconnecting = false;
@@ -282,7 +487,7 @@
     }
     try {
       await connectAcp(payload);
-      return true;
+      return hasLiveSession();
     } catch (e) {
       console.warn("ACP connect failed:", e);
       setStatus("Offline — will retry", "#ef4444");
@@ -294,7 +499,7 @@
   }
 
   // ---------- Chat UI ----------
-  function addMessage(role, content) {
+  function addMessage(role, content, opts = {}) {
     const container = $("chat-container");
     hideWelcome();
     const msgDiv = document.createElement("div");
@@ -317,6 +522,9 @@
     }
     container.appendChild(msgDiv);
     container.scrollTop = container.scrollHeight;
+    if (opts.persist !== false && typeof content === "string") {
+      appendChatHistory({ role, text: content });
+    }
     return msgDiv;
   }
 
@@ -396,13 +604,13 @@
     const prompt = input.value.trim();
     if (!prompt || busy) return;
 
-    if (!isConnected || !acpClient || !acpClient.ready) {
+    if (!hasLiveSession()) {
       setStatus("Reconnecting…", "#eab308");
       const ok = await ensureConnected("send");
-      if (!ok || !acpClient?.ready) {
+      if (!ok || !hasLiveSession()) {
         addMessage(
           "grok",
-          "Not paired / disconnected. Open /join again or reconnect in Settings."
+          "Not paired / disconnected. Open the join QR with your phone camera (or Settings → reconnect)."
         );
         return;
       }
@@ -439,7 +647,7 @@
 
     try {
       const result = await acpClient.prompt(prompt, {
-        sessionId: acpSessionId,
+        sessionId: acpSessionId || acpClient.sessionId,
         onUpdate: (update) => {
           const kind = update.sessionUpdate || update.type;
           if (kind === "agent_message_chunk") {
@@ -476,12 +684,28 @@
       const model =
         agentMeta?._meta?.modelState?.currentModelId || "connected";
       setStatus(`ACP • ${model}`, "#22c55e");
+
+      const tools = Array.from(ui.tools.children)
+        .map((el) => {
+          if (el.dataset && el.dataset.label) return el.dataset.label;
+          return (el.textContent || "").replace(/^[›>\s]+/, "").replace(/\s+(done|failed|…).*$/i, "").trim();
+        })
+        .filter(Boolean);
+      appendChatHistory({
+        role: "grok",
+        text: ui.bubble.textContent || text,
+        tools: tools.length ? tools : undefined,
+      });
     } catch (err) {
       console.error(err);
       ui.bubble.textContent =
         "❌ " + (err.message || String(err)) + "\n\nTry reconnecting in Settings.";
       ui.meta.textContent = "Grok • error";
       setStatus("Error — tap settings", "#ef4444");
+      appendChatHistory({
+        role: "grok",
+        text: ui.bubble.textContent,
+      });
       if (String(err.message || "").includes("WebSocket closed")) {
         isConnected = false;
       }
@@ -680,9 +904,15 @@
     $("settings-modal").style.display = "none";
     const ok = await checkConnection();
     if (ok) {
+      const attached =
+        pairPayload?.sessionId &&
+        acpSessionId &&
+        String(pairPayload.sessionId) === String(acpSessionId);
       addMessage(
         "grok",
-        `✅ Paired with official Grok Build.\n\nSession: ${acpSessionId}\nPermission mode: ${permissionMode}\n\nSend a message — it runs on your PC.`
+        attached
+          ? `✅ Attached to desktop session.\n\nSession: ${acpSessionId}\nPermission: ${permissionMode}\n\nAgent memory matches that TUI/desktop session. Avoid prompting from TUI and phone at the same time.`
+          : `✅ Paired with official Grok Build.\n\nSession: ${acpSessionId}\nPermission mode: ${permissionMode}\n\nSend a message — it runs on your PC.`
       );
     } else {
       addMessage(
@@ -692,11 +922,26 @@
     }
   }
 
+  function clearChat() {
+    clearChatHistoryStorage(pairPayload || loadPairFromStorage());
+    clearChatDom();
+    historyRestored = true;
+    const welcome = $("welcome-screen");
+    if (welcome) {
+      welcome.style.display = "";
+      welcome.innerHTML = `<div class="welcome-logo"><img src="assets/spacexai-symbol-white.png" alt=""></div><h2>Chat cleared</h2><p>History on this device was removed. Agent session on the PC is unchanged.</p>`;
+    }
+    $("settings-modal").style.display = "none";
+  }
+
   function clearPair() {
+    clearChatHistoryStorage(pairPayload || loadPairFromStorage());
     localStorage.removeItem(PAIR_STORAGE_KEY);
     localStorage.removeItem(SESSION_STORAGE_KEY);
     pairPayload = null;
     acpSessionId = null;
+    historyRestored = false;
+    clearChatDom();
     disconnectAcp({ intentional: true });
     setStatus("Not paired", "#ef4444");
     if ($("pair-json")) $("pair-json").value = "";
@@ -724,9 +969,15 @@
     savePairToStorage(parsed.payload);
     const ok = await checkConnection();
     if (ok) {
+      const attached =
+        pairPayload?.sessionId &&
+        acpSessionId &&
+        String(pairPayload.sessionId) === String(acpSessionId);
       addMessage(
         "grok",
-        `✅ QR paired — ACP ready.\n\nSession ${acpSessionId}\nSay hi or ask me to list files.`
+        attached
+          ? `✅ QR paired — attached to desktop session ${acpSessionId}.\n\nShared agent history (not live TUI mirror).`
+          : `✅ QR paired — ACP ready.\n\nSession ${acpSessionId}\nSay hi or ask me to list files.`
       );
     }
     return ok;
@@ -756,9 +1007,41 @@
     });
   }
 
+  function canUseInAppCamera() {
+    // getUserMedia for QR requires a secure context (HTTPS or localhost).
+    // LAN http://192.168.x.x is NOT secure — phone camera on the OS QR is the path.
+    const secure =
+      window.isSecureContext ||
+      location.protocol === "https:" ||
+      location.hostname === "localhost" ||
+      location.hostname === "127.0.0.1";
+    return !!secure && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  }
+
   async function startQRScan() {
     const modal = $("qr-modal");
     modal.style.display = "flex";
+
+    // Preferred path: system camera → join URL → this app (works offline of HTTPS).
+    if (!canUseInAppCamera()) {
+      $("qr-reader").innerHTML = `
+        <div style="text-align:left;padding:4px 4px 8px;font-size:13px;line-height:1.5;color:var(--text-dim);">
+          <p style="color:var(--text);font-weight:500;margin-bottom:10px;">Use your phone camera — not in-app Scan</p>
+          <ol style="padding-left:18px;margin:0 0 12px;">
+            <li style="margin-bottom:8px;">On the <strong style="color:var(--text);">PC pair page</strong>, show the QR (it encodes the join URL).</li>
+            <li style="margin-bottom:8px;">Open the QR with the <strong style="color:var(--text);">system camera</strong> (or share sheet).</li>
+            <li style="margin-bottom:8px;">That opens <code style="color:var(--accent);">/join</code> and pairs this app automatically.</li>
+          </ol>
+          <p style="font-size:12px;color:var(--text-mute);margin-bottom:12px;">
+            In-app camera scan needs HTTPS or localhost. On plain LAN HTTP it is blocked by the browser — that is expected.
+          </p>
+          <p style="font-size:12px;color:var(--text-mute);">
+            Already paired this session? Close this and wait for reconnect, or pull a live pair via Settings → Save &amp; connect after refreshing.
+          </p>
+        </div>`;
+      return;
+    }
+
     $("qr-reader").innerHTML =
       '<p style="color:#888;font-size:13px;padding:12px;">Loading camera…</p>';
     try {
@@ -767,7 +1050,7 @@
       $("qr-reader").innerHTML =
         '<p style="color:#f87171;font-size:13px;padding:12px;">' +
         escapeHtml(e.message) +
-        "<br><br>Use Settings → paste pair JSON, or open the join URL on this device.</p>";
+        "<br><br>Use your phone’s system camera on the desktop QR (join URL), or Settings → paste pair JSON.</p>";
       return;
     }
     $("qr-reader").innerHTML = "";
@@ -794,11 +1077,82 @@
   }
 
   function isStandalone() {
+    if (window.GrokPwaDetect && typeof GrokPwaDetect.isStandalone === "function") {
+      return GrokPwaDetect.isStandalone();
+    }
     return (
       window.matchMedia("(display-mode: standalone)").matches ||
       window.navigator.standalone === true ||
       document.referrer.includes("android-app://")
     );
+  }
+
+  function markPwaInstalled() {
+    if (window.GrokPwaDetect && typeof GrokPwaDetect.markInstalled === "function") {
+      GrokPwaDetect.markInstalled();
+    }
+  }
+
+  /**
+   * When the user is in a normal browser tab but we believe the PWA is
+   * installed, surface a banner. Browsers cannot always force-open the
+   * home-screen app — we deep-link to start_url and rely on OS link capture.
+   */
+  async function maybeShowOpenInstalledBanner() {
+    if (isStandalone()) return;
+    if (!window.GrokPwaDetect) return;
+    let det = { installed: false, method: "none" };
+    try {
+      det = await GrokPwaDetect.detectInstalled();
+    } catch {
+      return;
+    }
+    if (!det.installed) return;
+
+    const banner = $("open-pwa-banner");
+    if (!banner) return;
+    const copy = $("open-pwa-banner-copy");
+    if (copy) {
+      if (isIos()) {
+        copy.textContent =
+          "Open Grok Remote from your home screen (iOS can’t auto-switch from Safari).";
+      } else if (isAndroid()) {
+        copy.textContent =
+          "Tap Open app, or enable “Open supported links” in Android app info for automatic handoff.";
+      } else {
+        copy.textContent = "Open the installed app window for the best experience.";
+      }
+    }
+    banner.classList.add("show");
+    const go = $("open-pwa-banner-go");
+    const dismiss = $("open-pwa-banner-dismiss");
+    if (go) {
+      go.onclick = () => {
+        // Navigate to start_url — Android may open the installed PWA when
+        // handle_links / Open supported links is enabled.
+        const u = new URL("/app/?source=open-installed", location.origin);
+        u.searchParams.set("t", String(Date.now()));
+        // Keep current pair in storage; also re-pass if present
+        try {
+          const raw = localStorage.getItem(PAIR_STORAGE_KEY);
+          if (raw) {
+            const b64 = btoa(unescape(encodeURIComponent(raw)))
+              .replace(/\+/g, "-")
+              .replace(/\//g, "_")
+              .replace(/=+$/, "");
+            u.searchParams.set("pair", b64);
+          }
+        } catch {
+          /* ignore */
+        }
+        location.assign(u.toString());
+      };
+    }
+    if (dismiss) {
+      dismiss.onclick = () => {
+        banner.classList.remove("show");
+      };
+    }
   }
 
   function isIos() {
@@ -1022,8 +1376,14 @@
   }
 
   async function init() {
-    console.log("%c[Grok Remote] PWA v0.4", "color:#888");
+    console.log(`%c[Grok Remote] PWA v${APP_VERSION}`, "color:#888");
+    if (isStandalone()) {
+      document.body.classList.add("is-standalone");
+      markPwaInstalled();
+    }
     registerServiceWorker();
+    // Fire-and-forget install detection for browser→PWA handoff UI
+    maybeShowOpenInstalledBanner().catch(() => {});
 
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
@@ -1046,6 +1406,11 @@
       loadPairFromStorage();
     loadSettings();
     setupInput();
+
+    // Restore phone-side transcript immediately (before ACP connect)
+    if (pairPayload) {
+      restoreChatHistory(pairPayload);
+    }
 
     const status = $("connection-status");
     if (status) {
@@ -1079,7 +1444,8 @@
       const ok = await checkConnection();
       if (ok) {
         const welcome = $("welcome-screen");
-        if (welcome) {
+        // Only show connected tip when chat is still empty
+        if (welcome && !document.querySelector("#chat-container .message")) {
           welcome.innerHTML = `<div class="welcome-logo"><img src="assets/spacexai-symbol-white.png" alt=""></div><h2>Connected</h2><p>Session ready on your PC. Send a message below.</p><p style="margin-top:10px;font-size:12px;color:var(--text-mute);">Tip: use <strong style="color:var(--success);font-weight:500;">Install</strong> to add Grok Remote to your home screen.</p>`;
         }
       }
@@ -1095,6 +1461,7 @@
     showSettings,
     savePairSettings,
     clearPair,
+    clearChat,
     startQRScan,
     stopQRScan,
     switchTab,
@@ -1112,6 +1479,7 @@
   window.showSettings = showSettings;
   window.savePairSettings = savePairSettings;
   window.clearPair = clearPair;
+  window.clearChat = clearChat;
   window.startQRScan = startQRScan;
   window.stopQRScan = stopQRScan;
   window.switchTab = switchTab;

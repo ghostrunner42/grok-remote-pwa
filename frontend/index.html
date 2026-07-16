@@ -14,6 +14,7 @@
     <!-- Local only — no CDNs -->
     <script src="/lib/pair.js"></script>
     <script src="/lib/acp-client.js"></script>
+    <script src="pwa-detect.js"></script>
     <script src="remote-app.js" defer></script>
     <style>
         /* SpaceXAI / GrokNight-inspired tokens */
@@ -39,16 +40,34 @@
             --radius-sm: 8px;
             --radius-pill: 9999px;
             --header-h: 56px;
+            --safe-t: env(safe-area-inset-top, 0px);
             --safe-b: env(safe-area-inset-bottom, 0px);
+            --safe-l: env(safe-area-inset-left, 0px);
+            --safe-r: env(safe-area-inset-right, 0px);
+            /* Standalone PWAs often report 0 safe-area while content sits under the status bar.
+               Extra padding when installed keeps the header clear of the notch/status cluster. */
+            --pwa-top-pad: 0px;
             --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
             --font-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
             --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+        }
+
+        /* Detect installed / standalone display */
+        @media (display-mode: standalone) {
+            :root { --pwa-top-pad: 12px; }
+        }
+        @media (display-mode: fullscreen) {
+            :root { --pwa-top-pad: 12px; }
+        }
+        @media (display-mode: minimal-ui) {
+            :root { --pwa-top-pad: 8px; }
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         html, body {
             height: 100%;
+            height: 100dvh;
             background: var(--void);
             color: var(--text);
             font-family: var(--font);
@@ -66,15 +85,24 @@
                 var(--void);
         }
 
+        /* iOS Safari standalone flag (older) */
+        body.is-standalone {
+            --pwa-top-pad: 12px;
+        }
+
         /* ——— Header ——— */
         .header {
-            height: var(--header-h);
-            padding: 0 12px 0 14px;
+            min-height: var(--header-h);
+            height: auto;
+            padding-top: max(10px, calc(var(--safe-t) + var(--pwa-top-pad)));
+            padding-bottom: 10px;
+            padding-left: max(14px, calc(12px + var(--safe-l)));
+            padding-right: max(12px, calc(10px + var(--safe-r)));
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 8px;
-            background: rgba(10, 10, 12, 0.85);
+            background: rgba(10, 10, 12, 0.92);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border-bottom: 1px solid var(--border);
@@ -701,6 +729,21 @@
     </header>
 
     <!-- Add to Home Screen prompt -->
+    <!-- Shown in browser when we think the PWA is already installed -->
+    <div class="install-banner" id="open-pwa-banner" role="dialog" aria-label="Open installed app">
+        <div class="ib-icon" aria-hidden="true">
+            <img src="assets/spacexai-symbol-white.png" alt="">
+        </div>
+        <div class="ib-text">
+            <strong>Installed app available</strong>
+            <span id="open-pwa-banner-copy">Open the home-screen app for full-screen Grok Remote</span>
+        </div>
+        <div class="ib-actions">
+            <button type="button" class="ib-go" id="open-pwa-banner-go">Open app</button>
+            <button type="button" class="ib-dismiss" id="open-pwa-banner-dismiss">Stay here</button>
+        </div>
+    </div>
+
     <div class="install-banner" id="install-banner" role="dialog" aria-label="Install app">
         <div class="ib-icon"><img src="assets/spacexai-symbol-white.png" alt=""></div>
         <div class="ib-text">
@@ -725,7 +768,7 @@
             </div>
             <h2>Grok Build, on your phone</h2>
             <p>Pair with the desktop launcher to drive the official agent — tools, shell, and project files on your PC.</p>
-            <p style="margin-top:14px;">Scan the QR or open <code>/join</code> on this device.</p>
+            <p style="margin-top:14px;">Point your <strong style="color:var(--text);font-weight:500;">phone camera</strong> at the desktop QR (opens <code>/join</code>), or open the join URL.</p>
         </div>
     </div>
 
@@ -769,6 +812,7 @@
                 <option value="deny">Deny all</option>
             </select>
             <button type="button" class="btn-primary" onclick="savePairSettings()">Save &amp; connect</button>
+            <button type="button" class="btn-ghost" onclick="clearChat()">Clear chat history</button>
             <button type="button" class="btn-ghost" onclick="clearPair()">Clear pair</button>
             <p id="pair-status-detail"></p>
         </div>
@@ -776,8 +820,8 @@
 
     <div class="modal" id="qr-modal">
         <div class="modal-content" style="max-width:420px;">
-            <h3>Scan pair QR</h3>
-            <p class="sub">Point at the QR on your PC pair page. Prefer opening the join URL with your phone camera first.</p>
+            <h3>Pair with QR</h3>
+            <p class="sub">Best path: system camera → desktop join QR. In-app camera only works on HTTPS/localhost.</p>
             <div id="qr-reader" style="width:100%;max-width:320px;margin:0 auto;border-radius:12px;overflow:hidden;"></div>
             <button type="button" class="btn-ghost" onclick="stopQRScan()">Cancel</button>
         </div>
