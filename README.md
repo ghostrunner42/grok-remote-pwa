@@ -19,7 +19,7 @@ Not affiliated with or endorsed by xAI / SpaceXAI. Requires the official `grok` 
 - **Project cwd** = the directory where you launched `grok-remote`
 - **Shell on the desktop** — terminal bridge so agent shell tools work from the phone
 - **Files** — browse/read/write via agent FS extensions
-- **PWA-friendly** — installable UI; works offline from the LAN host (no CDN)
+- **Add to Home Screen** — true PWA install (Install button + iOS/Android guidance; service worker app shell)
 
 ---
 

@@ -193,6 +193,107 @@
             background: var(--accent-dim);
         }
 
+        .icon-btn.install {
+            border-color: rgba(52, 211, 153, 0.35);
+            color: var(--success);
+            background: rgba(52, 211, 153, 0.1);
+        }
+
+        /* Install banner (bottom sheet style) */
+        .install-banner {
+            display: none;
+            position: fixed;
+            left: 12px;
+            right: 12px;
+            bottom: calc(72px + var(--safe-b));
+            z-index: 150;
+            background: var(--surface);
+            border: 1px solid var(--border-strong);
+            border-radius: 14px;
+            padding: 12px 14px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+            gap: 12px;
+            align-items: center;
+        }
+
+        .install-banner.show {
+            display: flex;
+        }
+
+        .install-banner .ib-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: var(--void);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .install-banner .ib-icon img {
+            width: 22px;
+            height: 22px;
+        }
+
+        .install-banner .ib-text {
+            flex: 1;
+            min-width: 0;
+            text-align: left;
+        }
+
+        .install-banner .ib-text strong {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .install-banner .ib-text span {
+            font-size: 11px;
+            color: var(--text-mute);
+            line-height: 1.35;
+        }
+
+        .install-banner .ib-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .install-banner .ib-actions button {
+            border: none;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .install-banner .ib-go {
+            background: var(--accent);
+            color: #0A0A0C;
+        }
+
+        .install-banner .ib-dismiss {
+            background: transparent;
+            color: var(--text-mute);
+            border: 1px solid var(--border) !important;
+        }
+
+        .install-steps {
+            text-align: left;
+            font-size: 13px;
+            color: var(--text-dim);
+            line-height: 1.55;
+            margin: 12px 0 4px;
+        }
+
+        .install-steps li { margin-bottom: 8px; }
+        .install-steps strong { color: var(--text); }
+
         /* ——— Tabs ——— */
         .tabs {
             display: flex;
@@ -595,9 +696,22 @@
         <div class="header-actions">
             <button type="button" class="icon-btn" onclick="showSettings()" title="Settings">Settings</button>
             <button type="button" class="icon-btn accent" onclick="startQRScan()" title="Scan QR">Scan</button>
-            <button type="button" class="icon-btn" id="install-btn" onclick="installPWA()" style="display:none;color:var(--success);">Install</button>
+            <button type="button" class="icon-btn install" id="install-btn" onclick="installPWA()" title="Add to Home Screen">Install</button>
         </div>
     </header>
+
+    <!-- Add to Home Screen prompt -->
+    <div class="install-banner" id="install-banner" role="dialog" aria-label="Install app">
+        <div class="ib-icon"><img src="assets/spacexai-symbol-white.png" alt=""></div>
+        <div class="ib-text">
+            <strong>Add Grok Remote</strong>
+            <span id="install-banner-copy">Install for a full-screen home-screen app</span>
+        </div>
+        <div class="ib-actions">
+            <button type="button" class="ib-go" id="install-banner-go" onclick="installPWA()">Install</button>
+            <button type="button" class="ib-dismiss" onclick="dismissInstallBanner()">Not now</button>
+        </div>
+    </div>
 
     <nav class="tabs" role="tablist">
         <div class="tab active" onclick="switchTab('chat')" id="tab-chat" role="tab">Chat</div>
@@ -666,6 +780,17 @@
             <p class="sub">Point at the QR on your PC pair page. Prefer opening the join URL with your phone camera first.</p>
             <div id="qr-reader" style="width:100%;max-width:320px;margin:0 auto;border-radius:12px;overflow:hidden;"></div>
             <button type="button" class="btn-ghost" onclick="stopQRScan()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Install help (iOS / manual) -->
+    <div class="modal" id="install-modal">
+        <div class="modal-content">
+            <h3>Add to Home Screen</h3>
+            <p class="sub" id="install-modal-sub">Install Grok Remote like a native app.</p>
+            <ol class="install-steps" id="install-steps"></ol>
+            <button type="button" class="btn-primary" id="install-modal-primary" onclick="installPWA()">Install now</button>
+            <button type="button" class="btn-ghost" onclick="closeInstallModal()">Close</button>
         </div>
     </div>
 </body>

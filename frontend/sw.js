@@ -1,26 +1,75 @@
-// Minimal SW: network-first, no external cache, no install hang.
-// Bump CACHE so old v1 caches (that may have bad HTML) die.
-const CACHE_NAME = "grok-remote-v3-local-only";
+/* Grok Remote service worker — cache app shell for install / offline shell */
+const CACHE = "grok-remote-v0.4.0";
+const SHELL = [
+  "./",
+  "./index.html",
+  "./remote-app.js",
+  "./manifest.json",
+  "./sw.js",
+  "./assets/favicon.png",
+  "./assets/icon-192.png",
+  "./assets/icon-512.png",
+  "./assets/spacexai-symbol-white.png",
+  "./assets/spacexai-symbol-black.png",
+  "./vendor/html5-qrcode.min.js",
+];
 
 self.addEventListener("install", (event) => {
-  self.skipWaiting();
+  event.waitUntil(
+    caches
+      .open(CACHE)
+      .then((cache) => cache.addAll(SHELL))
+      .then(() => self.skipWaiting())
+      .catch(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((names) =>
-      Promise.all(
-        names
-          .filter((n) => n !== CACHE_NAME)
-          .map((n) => caches.delete(n))
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
       )
-    ).then(() => self.clients.claim())
+      .then(() => self.clients.claim())
   );
 });
 
-// Network-only for app shell so we never serve stale broken HTML with unpkg.
 self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  if (req.method !== "GET") return;
+
+  const url = new URL(req.url);
+  // Never cache API / pair / agent traffic (not under this SW scope usually)
+  if (url.pathname.startsWith("/api/")) return;
+
+  // Network-first for navigations so updates land; fall back to cache
+  if (req.mode === "navigate") {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put("./index.html", copy));
+          return res;
+        })
+        .catch(() => caches.match("./index.html"))
+    );
+    return;
+  }
+
+  // Cache-first for static shell assets
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request))
+    caches.match(req).then((cached) => {
+      if (cached) return cached;
+      return fetch(req)
+        .then((res) => {
+          if (res.ok && url.origin === self.location.origin) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req));
+    })
   );
 });

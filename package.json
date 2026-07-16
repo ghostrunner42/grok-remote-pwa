@@ -1,6 +1,7 @@
 {
   "name": "grok-remote",
   "version": "0.4.0",
+  "homepage": "https://github.com/ghostrunner42/grok-remote-pwa",
   "description": "Mobile remote control for official SpaceXAI Grok Build (ACP + terminal bridge)",
   "private": false,
   "license": "MIT",

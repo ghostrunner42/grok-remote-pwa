@@ -6,6 +6,7 @@
   const PAIR_STORAGE_KEY = "grokRemotePairV1";
   const SESSION_STORAGE_KEY = "grokRemoteSessionId";
   const PERM_MODE_KEY = "grokRemotePermMode";
+  const INSTALL_DISMISS_KEY = "grokRemoteInstallDismissed";
 
   let pairPayload = null;
   let isConnected = false;
@@ -792,13 +793,156 @@
     }
   }
 
+  function isStandalone() {
+    return (
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.navigator.standalone === true ||
+      document.referrer.includes("android-app://")
+    );
+  }
+
+  function isIos() {
+    return /iphone|ipad|ipod/i.test(navigator.userAgent);
+  }
+
+  function isAndroid() {
+    return /android/i.test(navigator.userAgent);
+  }
+
+  function showInstallBanner(force) {
+    if (isStandalone()) return;
+    if (!force && localStorage.getItem(INSTALL_DISMISS_KEY) === "1") return;
+    const banner = $("install-banner");
+    if (!banner) return;
+    const copy = $("install-banner-copy");
+    if (copy) {
+      if (isIos()) {
+        copy.textContent = "Share → Add to Home Screen for full-screen use";
+      } else if (deferredPrompt) {
+        copy.textContent = "Install for a full-screen home-screen app";
+      } else {
+        copy.textContent = "Add from the browser menu for a home-screen app";
+      }
+    }
+    banner.classList.add("show");
+  }
+
+  function dismissInstallBanner() {
+    const banner = $("install-banner");
+    if (banner) banner.classList.remove("show");
+    localStorage.setItem(INSTALL_DISMISS_KEY, "1");
+  }
+
+  function closeInstallModal() {
+    const m = $("install-modal");
+    if (m) m.style.display = "none";
+  }
+
+  function openInstallModal(stepsHtml, sub) {
+    const m = $("install-modal");
+    const steps = $("install-steps");
+    const subEl = $("install-modal-sub");
+    const primary = $("install-modal-primary");
+    if (subEl) subEl.textContent = sub || "Install Grok Remote like a native app.";
+    if (steps) steps.innerHTML = stepsHtml;
+    if (primary) {
+      primary.style.display = "block";
+      if (deferredPrompt) {
+        primary.textContent = "Install now";
+        primary.onclick = () => installPWA();
+      } else {
+        primary.textContent = "Got it";
+        primary.onclick = () => closeInstallModal();
+      }
+    }
+    if (m) m.style.display = "flex";
+  }
+
   function installPWA() {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.finally(() => {
-      deferredPrompt = null;
-      if ($("install-btn")) $("install-btn").style.display = "none";
-    });
+    // Chrome/Edge native prompt when available (usually needs HTTPS; LAN may skip)
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.finally(() => {
+        deferredPrompt = null;
+        dismissInstallBanner();
+        closeInstallModal();
+        updateInstallUi();
+      });
+      return;
+    }
+
+    // Already installed
+    if (isStandalone()) {
+      openInstallModal(
+        "<li>You’re already running as an installed app.</li>",
+        "Installed"
+      );
+      return;
+    }
+
+    // Platform-specific instructions (critical on iOS + LAN HTTP)
+    if (isIos()) {
+      openInstallModal(
+        [
+          "<li>Tap the <strong>Share</strong> button in Safari (square with arrow).</li>",
+          "<li>Scroll and tap <strong>Add to Home Screen</strong>.</li>",
+          "<li>Tap <strong>Add</strong> — open from the home screen for full-screen Grok Remote.</li>",
+          "<li>Pair once via the join QR; the home-screen app keeps the same site data.</li>",
+        ].join(""),
+        "iPhone / iPad (Safari)"
+      );
+      return;
+    }
+
+    if (isAndroid()) {
+      openInstallModal(
+        [
+          "<li>Open the browser menu <strong>⋮</strong>.</li>",
+          "<li>Tap <strong>Install app</strong> or <strong>Add to Home screen</strong>.</li>",
+          "<li>Confirm — launch from the home screen icon for standalone mode.</li>",
+          "<li>On plain HTTP LAN, Chrome may only offer “Add to Home screen” (still works).</li>",
+        ].join(""),
+        "Android (Chrome)"
+      );
+      return;
+    }
+
+    openInstallModal(
+      [
+        "<li>Use the browser install / app menu if shown.</li>",
+        "<li>Chrome: menu → <strong>Install Grok Remote</strong> or <strong>Cast, save, and share</strong>.</li>",
+        "<li>Edge: app icon in the address bar → <strong>Install</strong>.</li>",
+      ].join(""),
+      "Desktop browser"
+    );
+  }
+
+  function updateInstallUi() {
+    const btn = $("install-btn");
+    if (!btn) return;
+    if (isStandalone()) {
+      btn.style.display = "none";
+      dismissInstallBanner();
+      return;
+    }
+    // Always offer install entry on mobile / when prompt available
+    btn.style.display = "inline-flex";
+    if (deferredPrompt || isIos() || isAndroid()) {
+      showInstallBanner(false);
+    }
+  }
+
+  function registerServiceWorker() {
+    if (!("serviceWorker" in navigator)) return;
+    // Register relative to /app/ so scope covers the PWA
+    navigator.serviceWorker
+      .register("sw.js", { scope: "./" })
+      .then((reg) => {
+        console.log("[pwa] service worker registered", reg.scope);
+        // Check for updates when app resumes
+        reg.update().catch(() => {});
+      })
+      .catch((err) => console.warn("[pwa] SW register failed", err));
   }
 
   function setupInput() {
@@ -878,18 +1022,22 @@
   }
 
   async function init() {
-    console.log("%c[Grok Remote] Phase 3+ app (local assets)", "color:#888");
-    // Drop any broken SW that may have cached unpkg-dependent HTML
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.getRegistrations().then((regs) => {
-        regs.forEach((r) => r.unregister().catch(() => {}));
-      });
-      // Optional re-register lightweight SW later — skip for now to avoid cache traps
-    }
+    console.log("%c[Grok Remote] PWA v0.4", "color:#888");
+    registerServiceWorker();
+
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
       deferredPrompt = e;
-      if ($("install-btn")) $("install-btn").style.display = "inline-block";
+      updateInstallUi();
+      showInstallBanner(true);
+    });
+
+    window.addEventListener("appinstalled", () => {
+      deferredPrompt = null;
+      localStorage.setItem(INSTALL_DISMISS_KEY, "1");
+      dismissInstallBanner();
+      updateInstallUi();
+      console.log("[pwa] appinstalled");
     });
 
     pairPayload =
@@ -920,13 +1068,19 @@
       if (!isConnected || !acpClient?.ready) ensureConnected("focus");
     });
 
+    updateInstallUi();
+    // Soft prompt after a short delay if not installed
+    setTimeout(() => {
+      if (!isStandalone()) showInstallBanner(false);
+    }, 2500);
+
     if (pairPayload) {
       acpSessionId = localStorage.getItem(SESSION_STORAGE_KEY);
       const ok = await checkConnection();
       if (ok) {
         const welcome = $("welcome-screen");
         if (welcome) {
-          welcome.innerHTML = `<h2>✅ Connected</h2><p>Session ready on your PC. Send a message below.</p><p style="margin-top:8px;font-size:12px;color:#555;">Re-opens auto-reconnect. Chat is on the agent server (not the TUI transcript).</p>`;
+          welcome.innerHTML = `<div class="welcome-logo"><img src="assets/spacexai-symbol-white.png" alt=""></div><h2>Connected</h2><p>Session ready on your PC. Send a message below.</p><p style="margin-top:10px;font-size:12px;color:var(--text-mute);">Tip: use <strong style="color:var(--success);font-weight:500;">Install</strong> to add Grok Remote to your home screen.</p>`;
         }
       }
     } else {
@@ -948,6 +1102,8 @@
     goBack,
     filterFiles,
     installPWA,
+    dismissInstallBanner,
+    closeInstallModal,
     checkConnection,
   };
 
@@ -963,6 +1119,8 @@
   window.goBack = goBack;
   window.filterFiles = filterFiles;
   window.installPWA = installPWA;
+  window.dismissInstallBanner = dismissInstallBanner;
+  window.closeInstallModal = closeInstallModal;
 
   window.addEventListener("load", init);
 })();
